@@ -11,7 +11,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "build": "tsc && electron-forge make"
+    "build": "tsc && electron-forge make",
+    "prestart": "mkdir -p dist && cp src/*.html dist/ && cp src/*.css dist/"
   },
   "keywords": [],
   "author": {

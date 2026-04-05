@@ -1,12 +1,21 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <div id="record-pill" class="pill">
+      <div id="record-indicator" class="indicator"></div>
+      <span id="record-text">Listening...</span>
+      <div id="wave-container" class="wave-container">
+         <div class="bar"></div>
+         <div class="bar"></div>
+         <div class="bar"></div>
+         <div class="bar"></div>
+      </div>
+    </div>
+    <script src="renderer.js"></script>
   </body>
 </html>

@@ -1,13 +1,14 @@
-import { app, BrowserWindow } from 'electron';
+import { app, globalShortcut, BrowserWindow } from 'electron';
 import * as path from 'node:path';
 import { setupTray } from './tray';
+import { createFloatingWindow } from './ui';
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
 let tray = null;
+let isRecording = false;
 
 app.whenReady().then(() => {
   // Phase 1: Hide from macOS Dock
@@ -18,12 +19,31 @@ app.whenReady().then(() => {
   // Phase 1: Implement System Tray
   tray = setupTray();
   
-  // NOTE: Phase 2 will implement the Floating Record Button UI here.
-  // We keep the app running through the Tray and do not spawn a default window.
+  // Phase 2: Implement Floating Record Feature
+  const floatingWin = createFloatingWindow();
+
+  // Phase 2: Register Global Shortcut (Cmd+Shift+Space)
+  globalShortcut.register('CommandOrControl+Shift+Space', () => {
+    isRecording = !isRecording;
+    
+    if (isRecording) {
+      floatingWin.showInactive(); // Show without taking user focus away from their current task!
+      floatingWin.webContents.send('recording-state', { active: true });
+      // TODO (Phase 3): Start Audio Recording Buffer
+    } else {
+      floatingWin.webContents.send('recording-state', { active: false });
+      // Wait for UI animation duration then hide
+      setTimeout(() => floatingWin.hide(), 400); 
+      // TODO (Phase 3): Stop Audio Recording Buffer and pass to Pipeline
+    }
+  });
 });
 
-// For a menubar-only background app, we typically don't quit when windows close,
-// since we want it running in the background until the user explicitly quits via Tray.
+app.on('will-quit', () => {
+  // Unregister shortcuts cleanly when app shuts down
+  globalShortcut.unregisterAll();
+});
+
 app.on('window-all-closed', () => {
-  // No-op
+  // No-op for menubar
 });

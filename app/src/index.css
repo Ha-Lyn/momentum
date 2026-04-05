@@ -1,8 +1,85 @@
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Avoid scrollbars on small floating frame */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: transparent; /* Allows OS to bleed through */
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  /* Premium Glassmorphism aesthetic */
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.7), rgba(15, 15, 15, 0.9));
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 12px 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  
+  /* Initial off-screen state */
+  transform: translateY(30px);
+  opacity: 0;
+  
+  /* Spring transition for smooth show/hide */
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out;
+}
+
+.pill.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.indicator {
+  width: 10px;
+  height: 10px;
+  background-color: #ff3b30;
+  border-radius: 50%;
+  margin-right: 12px;
+  box-shadow: 0 0 12px rgba(255, 59, 48, 0.8);
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+}
+
+#record-text {
+  color: #eeeeee;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.wave-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 14px;
+}
+
+.bar {
+  width: 3px;
+  height: 12px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 2px;
+  animation: wave 1.2s infinite ease-in-out;
+}
+
+.bar:nth-child(1) { animation-delay: 0.0s; }
+.bar:nth-child(2) { animation-delay: 0.15s; }
+.bar:nth-child(3) { animation-delay: 0.3s; }
+.bar:nth-child(4) { animation-delay: 0.45s; }
+
+@keyframes wave {
+  0%, 100% { height: 6px; }
+  50% { height: 16px; background-color: rgba(255, 255, 255, 0.9); }
 }
