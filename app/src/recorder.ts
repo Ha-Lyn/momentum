@@ -1,10 +1,9 @@
-import record from 'node-record-lpcm16';
-import * as fs from 'node:fs';
+import { ChildProcess, spawn } from 'node:child_process';
 import * as path from 'node:path';
 import { app, systemPreferences } from 'electron';
 
 export class AudioRecorder {
-  private fileStream: fs.WriteStream | null = null;
+  private ffmpegProcess: ChildProcess | null = null;
   private recording = false;
   private currentFilePath: string = '';
 
@@ -24,43 +23,70 @@ export class AudioRecorder {
 
   startCapture() {
     if (this.recording) return;
-    
-    // Save to temp file
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     this.currentFilePath = path.join(app.getPath('temp'), `momentum-capture-${timestamp}.wav`);
-    this.fileStream = fs.createWriteStream(this.currentFilePath);
-    
-    console.log(`[AudioRecorder] Starting microphone capture...`);
-    
-    // Initialize recording process via `rec` or `sox`
-    // Ensure you have `sox` or standard recorder installed locally or fallback
-    record.record({
-      sampleRate: 16000,
-      channels: 1,
-      threshold: 0,
-      // On macOS, 'rec' bindings usually rely heavily on system sox
-      // but 'node-record-lpcm16' takes care of platform fallbacks generally
-    }).stream().pipe(this.fileStream);
-    
+
+    console.log(`[AudioRecorder] Starting microphone capture via ffmpeg...`);
+
+    // Use ffmpeg to record from the default macOS audio input device
+    // -f avfoundation: macOS audio/video capture framework
+    // -i ":0": default audio input device (colon prefix = audio-only)
+    // -ar 16000: 16kHz sample rate (ideal for speech recognition)
+    // -ac 1: mono channel
+    // -y: overwrite output without asking
+    this.ffmpegProcess = spawn('ffmpeg', [
+      '-f', 'avfoundation',
+      '-i', ':0',
+      '-ar', '16000',
+      '-ac', '1',
+      '-y',
+      this.currentFilePath,
+    ]);
+
+    this.ffmpegProcess.stderr?.on('data', (data: Buffer) => {
+      // ffmpeg writes all status output to stderr — this is normal
+      console.log(`[ffmpeg] ${data.toString().trim()}`);
+    });
+
+    this.ffmpegProcess.on('error', (err) => {
+      console.error('[AudioRecorder] Failed to start ffmpeg:', err.message);
+      this.recording = false;
+    });
+
+    this.ffmpegProcess.on('close', (code) => {
+      console.log(`[AudioRecorder] ffmpeg process exited with code ${code}`);
+      this.ffmpegProcess = null;
+    });
+
     this.recording = true;
-    console.log(`[AudioRecorder] Audio stream streaming to ${this.currentFilePath}`);
+    console.log(`[AudioRecorder] Recording to ${this.currentFilePath}`);
   }
 
   stopCapture(): Promise<string> {
     return new Promise((resolve, reject) => {
-      if (!this.recording) return reject(new Error('Not recording'));
-      
-      record.stop();
-      this.recording = false;
-      
-      if (this.fileStream) {
-        this.fileStream.end(() => {
-          console.log(`[AudioRecorder] Stopped recording. Successfully saved to ${this.currentFilePath}`);
-          resolve(this.currentFilePath);
-        });
-      } else {
-        resolve(this.currentFilePath);
+      if (!this.recording || !this.ffmpegProcess) {
+        return reject(new Error('Not recording'));
       }
+
+      this.recording = false;
+
+      // Send 'q' to ffmpeg's stdin to gracefully stop recording
+      // This allows ffmpeg to finalize the WAV file headers properly
+      this.ffmpegProcess.stdin?.write('q');
+
+      this.ffmpegProcess.on('close', () => {
+        console.log(`[AudioRecorder] Stopped recording. Saved to ${this.currentFilePath}`);
+        resolve(this.currentFilePath);
+      });
+
+      // Safety timeout — force kill if ffmpeg hangs
+      setTimeout(() => {
+        if (this.ffmpegProcess) {
+          this.ffmpegProcess.kill('SIGKILL');
+          this.ffmpegProcess = null;
+        }
+      }, 5000);
     });
   }
 }

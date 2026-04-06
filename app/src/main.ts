@@ -1,7 +1,7 @@
-import { app, globalShortcut, BrowserWindow, systemPreferences } from 'electron';
+import { app, globalShortcut } from 'electron';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { setupTray } from './tray';
+import { setupTray, updateTrayMenu, TrayCallbacks } from './tray';
 import { createFloatingWindow } from './ui';
 import { recorder } from './recorder';
 
@@ -16,57 +16,54 @@ let tray = null;
 let isRecording = false;
 
 app.whenReady().then(async () => {
-  // Phase 3 Minor: Allow user to alter the Icon and name on dock by overriding default.
-  // It only triggers if icon.svg is present in the parent directory.
-  const iconPath = path.join(app.getAppPath(), 'icon.svg');
+  // Set the dock icon from the bundled P1.png
+  const iconPath = path.join(app.getAppPath(), 'P1.png');
   if (app.dock && fs.existsSync(iconPath)) {
-    // Note: dock.setIcon usually expects png/icns, but will attempt to map the svg or bypass if compatible
     app.dock.setIcon(iconPath);
   }
 
-  // Phase 1: Hide from macOS Dock 
-  // (Left intact based on 'leave the electron icon only if icon.svg does not exist' request,
-  // meaning we might show the dock in dev/usage or leave it running headless as designed).
-  if (app.dock) {
-    app.dock.hide();
-  }
-
-  // Phase 3: Hardware Microphone Permissions Check
+  // Hardware Microphone Permissions Check
   try {
     await recorder.requestMicrophoneAccess();
   } catch (e) {
     console.warn("Microphone access not granted.", e);
   }
 
-  // Phase 1: Implement System Tray
-  tray = setupTray();
-  
-  // Phase 2: Implement Floating Record Feature
+  // Floating Record Indicator
   const floatingWin = createFloatingWindow();
 
-  // Phase 2/3: Register Global Shortcut mapping to the Audio Buffer pipeline
-  globalShortcut.register('CommandOrControl+Shift+Space', () => {
+  // Shared recording toggle logic (used by both shortcut and tray menu)
+  const toggleRecording = () => {
     isRecording = !isRecording;
-    
+
     if (isRecording) {
-      floatingWin.showInactive(); 
+      floatingWin.showInactive();
       floatingWin.webContents.send('recording-state', { active: true });
-      
-      // Phase 3: Start Node Record Audio capture
       recorder.startCapture();
     } else {
       floatingWin.webContents.send('recording-state', { active: false });
-      
-      // Phase 3: Stop Audio Buffer
+
       recorder.stopCapture().then((wavFilePath) => {
-        console.log('Capture finished, ready for pipeline:', wavFilePath);
-        // Phase 4+ will pick up this file
+        console.log('[App] Capture saved at:', wavFilePath);
       }).catch(console.error);
 
       // Wait for UI animation duration then hide
-      setTimeout(() => floatingWin.hide(), 400); 
+      setTimeout(() => floatingWin.hide(), 400);
     }
-  });
+
+    // Update tray menu to reflect current state
+    updateTrayMenu(isRecording, trayCallbacks);
+  };
+
+  const trayCallbacks: TrayCallbacks = {
+    onToggleRecording: toggleRecording,
+  };
+
+  // System Tray (with working recording toggle)
+  tray = setupTray(trayCallbacks);
+
+  // Global Shortcut for Audio Capture
+  globalShortcut.register('CommandOrControl+Shift+Space', toggleRecording);
 });
 
 app.on('will-quit', () => {
