@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'node:child_process';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { app, systemPreferences } from 'electron';
 
 export class AudioRecorder {
@@ -25,7 +26,11 @@ export class AudioRecorder {
     if (this.recording) return;
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    this.currentFilePath = path.join(app.getPath('temp'), `momentum-capture-${timestamp}.wav`);
+    const dirPath = path.join(app.getPath('documents'), 'Momentum Eigenvalues');
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    this.currentFilePath = path.join(dirPath, `momentum-capture-${timestamp}.wav`);
 
     console.log(`[AudioRecorder] Starting microphone capture via ffmpeg...`);
 
