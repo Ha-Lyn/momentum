@@ -15,8 +15,8 @@ export const setupTray = (callbacks: TrayCallbacks) => {
 
   if (fs.existsSync(iconPath)) {
     icon = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 });
-    // Mark as template so macOS applies proper dark/light mode styling
-    icon.setTemplateImage(true);
+    // Not setting as template image so the original PNG colors show
+    // icon.setTemplateImage(true);
   } else {
     console.warn('[Tray] P1.png not found, falling back to text-only tray');
     icon = nativeImage.createEmpty();
