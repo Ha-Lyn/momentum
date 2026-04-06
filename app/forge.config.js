@@ -5,7 +5,7 @@ module.exports = {
   packagerConfig: {
     asar: true,
     icon: './P1',
-    extraResource: ['./P1.png'],
+    extraResource: ['./P1.png', './bin/ffmpeg'],
   },
   rebuildConfig: {},
   makers: [

@@ -40,7 +40,11 @@ export class AudioRecorder {
     // -ar 16000: 16kHz sample rate (ideal for speech recognition)
     // -ac 1: mono channel
     // -y: overwrite output without asking
-    this.ffmpegProcess = spawn('ffmpeg', [
+    const ffmpegPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'bin', 'ffmpeg')
+      : path.join(app.getAppPath(), 'bin', 'ffmpeg');
+
+    this.ffmpegProcess = spawn(ffmpegPath, [
       '-f', 'avfoundation',
       '-i', ':0',
       '-ar', '16000',

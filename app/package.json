@@ -12,7 +12,8 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
     "build": "tsc && electron-forge make",
-    "prestart": "mkdir -p dist && cp src/*.html dist/ && cp src/*.css dist/"
+    "prestart": "mkdir -p dist && cp src/*.html dist/ && cp src/*.css dist/",
+    "prebuild": "bash ./download-ffmpeg.sh && mkdir -p dist && cp src/*.html dist/ && cp src/*.css dist/"
   },
   "keywords": [],
   "author": {
