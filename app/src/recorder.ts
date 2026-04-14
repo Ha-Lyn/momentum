@@ -31,6 +31,8 @@ export class AudioRecorder {
       fs.mkdirSync(dirPath, { recursive: true });
     }
     this.currentFilePath = path.join(dirPath, `momentum-capture-${timestamp}.wav`);
+    //Testing on dev mode
+    //this.currentFilePath = path.join(dirPath, 'test.wav');
 
     console.log(`[AudioRecorder] Starting microphone capture via ffmpeg...`);
 
@@ -86,7 +88,34 @@ export class AudioRecorder {
 
       this.ffmpegProcess.on('close', () => {
         console.log(`[AudioRecorder] Stopped recording. Saved to ${this.currentFilePath}`);
-        resolve(this.currentFilePath);
+        
+        console.log(`[Transcription] Starting transcription...`);
+        const pythonProcess = spawn('uv run', [
+          path.join(app.getAppPath(), 'scripts', 'transcribe.py'),
+          this.currentFilePath
+        ]);
+
+        let transcriptText = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+          const text = data.toString();
+          console.log(`[Transcription] ${text.trim()}`);
+          transcriptText += text;
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          console.error(`[Transcription Error] ${data.toString().trim()}`);
+        });
+
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            console.log(`[Transcription] Process exited with code ${code}`);
+          } else {
+            console.log(`[Transcription] Completed successfully.`);
+          }
+          // Resolve with the file path once transcription is completed
+          resolve(this.currentFilePath);
+        });
       });
 
       // Safety timeout — force kill if ffmpeg hangs
