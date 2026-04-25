@@ -115,6 +115,13 @@ export class AudioRecorder {
             console.log(`[Transcription] Process exited with code ${code}`);
           } else {
             console.log(`[Transcription] Completed successfully.`);
+            try {
+              const mdFilePath = this.currentFilePath.replace(/\.wav$/, '.md');
+              fs.writeFileSync(mdFilePath, transcriptText.trim(), 'utf8');
+              console.log(`[Transcription] Saved to markdown: ${mdFilePath}`);
+            } catch (err) {
+              console.error(`[Transcription Error] Failed to save markdown file:`, err);
+            }
           }
           // Resolve with the file path once transcription is completed
           resolve(this.currentFilePath);
