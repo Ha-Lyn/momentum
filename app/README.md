@@ -11,3 +11,12 @@ Since Mac-Os is the only OS supported, one question naturally arrises which is w
 I'm currently trying to implement some source of control of recorded and transcription files whitout recurring to web apps (i.e. cloud backend) since is destined to be a independant app that runs entirely in your local machine.
 
 I acctually have an ideia for that and goes around with using SqLite which will have some sort of control and is very lightweighted.
+
+
+### Update 25/04/2026
+We have a beta build ready to be tested. The application can now record audio and transcribe it to a markdown file. The app still runs soly on MacOs systems. Besides missing an UI it's fully functional for the main concept.
+
+For now its build based on Electron-Js (for it's simplicity) and runs a python script using the "uv" ecosystem. 
+The transcriptions currently runs using the OpenAI Whisper model. For usage a OPEN_API_KEY must be set in the enviroment (i.e. export OPEN_API_KEY='...').
+
+I did not had a lot of time investment in the last couple weeks since work cought up to me quickly. I hope it settles down in the next month. PLEASE AI SUGGESTION STOP MAKING DUMB SUGGESTIONS. 
