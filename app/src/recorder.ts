@@ -90,10 +90,13 @@ export class AudioRecorder {
         console.log(`[AudioRecorder] Stopped recording. Saved to ${this.currentFilePath}`);
         
         console.log(`[Transcription] Starting transcription...`);
-        const pythonProcess = spawn('uv run', [
+        const pythonProcess = spawn('uv', [
+          'run',
           path.join(app.getAppPath(), 'scripts', 'transcribe.py'),
           this.currentFilePath
-        ]);
+        ], {
+          env: { ...process.env, PATH: `${process.env.PATH}:${process.env.HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin` }
+        });
 
         let transcriptText = '';
 

@@ -11,7 +11,10 @@ def transcribe_audio(audio_path: str) -> str:
         transcription = client.audio.transcriptions.create(
             model="whisper-1", 
             file=audio_file,
-            language="en"
+            language="pt"
+             # ISO-639-1 format for language
+             # use "en" for english 
+             # use "pt" for portuguese (currently there is no distinction between pt-pt and pt-br)
         )
     return transcription.text
 
