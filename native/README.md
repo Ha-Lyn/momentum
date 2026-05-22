@@ -4,7 +4,7 @@ Native macOS port of the Electron prototype that lives in [`app/`](../app/).
 
 ## What is ported
 
-- Menu bar app with no dock presence
+- Menu bar app with dock icon
 - Global shortcut: `Command + Shift + Space`
 - Floating recording indicator
 - Local microphone recording
@@ -17,7 +17,7 @@ These items appear in the PRD but are not implemented in the Electron codebase, 
 
 - GPT analysis step
 - Offline queue / retry processing
-- Config persistence
+- API key persistence
 - Passive window / browser context capture
 - Indexing / note connections
 
@@ -39,6 +39,7 @@ Example config file:
 ```
 
 The config file fallback exists because Finder-launched macOS apps do not reliably inherit shell environment variables.
+You can also set the key from the app menu, and Momentum will write the same file for you.
 
 ## Run in development
 

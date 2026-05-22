@@ -21,11 +21,6 @@ private struct WhisperResponse: Decodable {
     let text: String
 }
 
-private struct MomentumConfiguration: Decodable {
-    let openAIAPIKey: String?
-    let openAPIKey: String?
-}
-
 struct TranscriptionService: Sendable {
     private let session: URLSession
     private let endpoint = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
@@ -34,7 +29,7 @@ struct TranscriptionService: Sendable {
         self.session = session
     }
 
-    func transcribe(audioURL: URL) async throws -> String {
+    func transcribe(audioURL: URL, language: TranscriptionLanguage) async throws -> String {
         let apiKey = try resolveAPIKey()
         let boundary = "Boundary-\(UUID().uuidString)"
 
@@ -42,7 +37,7 @@ struct TranscriptionService: Sendable {
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try makeBody(audioURL: audioURL, boundary: boundary)
+        request.httpBody = try makeBody(audioURL: audioURL, boundary: boundary, language: language)
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -62,7 +57,7 @@ struct TranscriptionService: Sendable {
         let environment = ProcessInfo.processInfo.environment
         let apiKey = environment["OPENAI_API_KEY"]
             ?? environment["OPEN_API_KEY"]
-            ?? loadAPIKeyFromConfigurationFile()
+            ?? AppConfigurationStore.storedAPIKey()
 
         guard let apiKey, !apiKey.isEmpty else {
             throw TranscriptionError.missingAPIKey
@@ -71,29 +66,7 @@ struct TranscriptionService: Sendable {
         return apiKey
     }
 
-    private func loadAPIKeyFromConfigurationFile() -> String? {
-        guard let applicationSupportDirectory = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
-            return nil
-        }
-
-        let configURL = applicationSupportDirectory
-            .appendingPathComponent("Momentum", isDirectory: true)
-            .appendingPathComponent("config.json")
-
-        guard
-            let data = try? Data(contentsOf: configURL),
-            let configuration = try? JSONDecoder().decode(MomentumConfiguration.self, from: data)
-        else {
-            return nil
-        }
-
-        return configuration.openAIAPIKey ?? configuration.openAPIKey
-    }
-
-    private func makeBody(audioURL: URL, boundary: String) throws -> Data {
+    private func makeBody(audioURL: URL, boundary: String, language: TranscriptionLanguage) throws -> Data {
         let lineBreak = "\r\n"
         let audioData = try Data(contentsOf: audioURL)
         var body = Data()
@@ -102,13 +75,15 @@ struct TranscriptionService: Sendable {
         body.append("Content-Disposition: form-data; name=\"model\"\(lineBreak)\(lineBreak)")
         body.append("whisper-1\(lineBreak)")
 
-        body.append("--\(boundary)\(lineBreak)")
-        body.append("Content-Disposition: form-data; name=\"language\"\(lineBreak)\(lineBreak)")
-        body.append("pt\(lineBreak)")
+        if let languageCode = language.apiValue {
+            body.append("--\(boundary)\(lineBreak)")
+            body.append("Content-Disposition: form-data; name=\"language\"\(lineBreak)\(lineBreak)")
+            body.append("\(languageCode)\(lineBreak)")
+        }
 
         body.append("--\(boundary)\(lineBreak)")
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audioURL.lastPathComponent)\"\(lineBreak)")
-        body.append("Content-Type: audio/mp4\(lineBreak)\(lineBreak)")
+        body.append("Content-Type: audio/m4a\(lineBreak)\(lineBreak)")
         body.append(audioData)
         body.append(lineBreak)
 

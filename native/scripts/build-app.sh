@@ -20,5 +20,6 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$BUILD_DIR/MomentumNative" "$MACOS_DIR/MomentumNative"
 cp "$ROOT_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$ROOT_DIR/../app/P1.png" "$RESOURCES_DIR/P1.png"
 
 echo "Built $APP_DIR"
