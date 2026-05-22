@@ -1,0 +1,7 @@
+.build
+.build-scratch
+.swift-cache
+.swift-home
+.clang-module-cache
+dist
+*.pkg

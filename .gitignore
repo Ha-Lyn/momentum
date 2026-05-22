@@ -1,7 +1,7 @@
 
 app/dist/*
 app/node_modules
-
+*.pkg
 # Logs
 logs
 *.log
