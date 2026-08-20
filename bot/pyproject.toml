@@ -1,0 +1,18 @@
+[project]
+name = "momentum-bot"
+version = "0.1.0"
+description = "Telegram bot that transcribes voice messages locally with whisper.cpp"
+requires-python = ">=3.10"
+dependencies = [
+    "python-telegram-bot>=21",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
