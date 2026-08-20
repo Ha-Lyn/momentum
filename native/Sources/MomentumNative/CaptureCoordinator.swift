@@ -19,6 +19,7 @@ enum CaptureCoordinatorError: LocalizedError {
 @MainActor
 final class CaptureCoordinator {
     private let audioRecorder = AudioRecorder()
+    private let transcriptionService = TranscriptionService()
     private var selectedLanguage = TranscriptionLanguage.load()
     private var activeCaptureLanguage: TranscriptionLanguage?
 
@@ -48,7 +49,7 @@ final class CaptureCoordinator {
         let transcript: String
 
         do {
-            transcript = try await TranscriptionService().transcribe(audioURL: audioURL, language: language)
+            transcript = try await transcriptionService.transcribe(audioURL: audioURL, language: language)
         } catch {
             try? writeTranscriptionError(error, nextTo: audioURL)
             throw CaptureCoordinatorError.transcriptionFailed(audioURL: audioURL, underlying: error)

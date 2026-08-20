@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "MomentumNative",
     platforms: [
-        .macOS(.v13),
+        .macOS(.v14),
     ],
     products: [
         .executable(
@@ -13,9 +13,15 @@ let package = Package(
             targets: ["MomentumNative"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.12.4")
+    ],
     targets: [
         .executableTarget(
-            name: "MomentumNative"
+            name: "MomentumNative",
+            dependencies: [
+                .product(name: "FluidAudio", package: "FluidAudio")
+            ]
         ),
     ]
 )
