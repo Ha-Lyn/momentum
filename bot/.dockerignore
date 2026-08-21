@@ -1,0 +1,19 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.uv-cache/
+
+# Models are downloaded at container start into a volume — never bake ~1.6 GB
+# into the image or send it in the build context.
+models/
+*.bin
+
+# Secrets — the container gets them from compose env_file / environment.
+.env
+.env.*
+
+# Git / editor
+.git
+.DS_Store

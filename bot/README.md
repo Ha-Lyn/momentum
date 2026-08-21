@@ -104,6 +104,51 @@ uv run pytest
 The tests cover configuration parsing, command construction, and message
 chunking; they do not require whisper.cpp, ffmpeg, or a bot token.
 
+## Run with Podman / Docker
+
+The bot is fully containerised — `bot/Dockerfile` (multi-stage) plus a
+`docker-compose.yml` at the repo root. The image includes ffmpeg and a
+prebuilt CPU `whisper-cli` (no Metal, no compilation); the whisper model
+(~1.6 GB) is downloaded automatically into a volume on first start.
+
+Prerequisite: Podman with a Linux machine (`podman machine init/start` on
+macOS) — or Docker Desktop.
+
+```bash
+# 1. Configure the token (required)
+cp bot/.env.example bot/.env
+#    edit bot/.env  →  TELEGRAM_BOT_TOKEN=123456:ABC-def...
+
+# 2. Build and run
+cd <repo-root>
+docker compose up --build          # Docker
+podman compose up --build          # or Podman (compose provider)
+podman-compose up --build          # or podman-compose
+
+# 3. Logs
+docker compose logs -f bot
+podman logs -f momentum-bot
+```
+
+The model is stored in the `momentum-models` volume. To use a different
+model, set `WHISPER_CPP_MODEL` in `docker-compose.yml`, e.g.
+`/models/ggml-large-v3-turbo-q5_0.bin` — it downloads on next start.
+
+### Build only / run tests in a container
+
+```bash
+podman build -t momentum-bot ./bot            # runtime image
+podman build --target test ./bot              # runs pytest, no runtime image
+```
+
+### Notes
+
+- CPU-only: whisper.cpp runs on the container's CPU (no Metal), so
+  transcription is slower than on the host M-series Mac.
+- The bot container talks outbound to Telegram only; no ports need mapping.
+- Model swaps via volume: remove the volume to force a re-download
+  (`podman volume rm momentum-models`).
+
 ## Notes & limits
 
 - **Language:** Portuguese is forced by default. Whisper does not distinguish

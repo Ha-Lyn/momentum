@@ -1,0 +1,41 @@
+# Momentum — containerised services
+#
+# Works with both Docker Compose and Podman Compose:
+#   docker compose up --build        # or
+#   podman compose up --build        # or
+#   podman-compose up --build
+#
+# Setup (once): copy the bot env template and fill in your token.
+#   cp bot/.env.example bot/.env
+#   # edit bot/.env  →  TELEGRAM_BOT_TOKEN=...
+#
+# The whisper.cpp model (~1.6 GB) is downloaded on first start into the
+# `momentum-models` volume (see bot/entrypoint.sh).
+
+services:
+  bot:
+    build:
+      context: ./bot
+    container_name: momentum-bot
+    restart: unless-stopped
+    env_file:
+      - ./bot/.env
+    environment:
+      # Absolute path inside the container; entrypoint downloads it if missing.
+      WHISPER_CPP_MODEL: /models/ggml-large-v3-turbo.bin
+      # Override the model (downloads on first start) e.g.:
+      # WHISPER_CPP_MODEL: /models/ggml-large-v3-turbo-q5_0.bin
+      WHISPER_LANGUAGE: pt
+      BOT_TMP_DIR: /tmp/momentum-bot
+    volumes:
+      - momentum-models:/models
+    healthcheck:
+      # The bot is a long-polling process; verify the Python process is alive.
+      test: ["CMD", "python", "-c", "import os,sys; sys.exit(0 if os.path.exists('/proc/1/cmdline') and b'bot.py' in open('/proc/1/cmdline','rb').read() else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  momentum-models:
