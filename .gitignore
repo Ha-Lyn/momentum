@@ -1,6 +1,14 @@
 
 app/dist/*
 app/node_modules
+
+# Xcode / Swift
+xcuserdata/
+*.xcuserstate
+native/.build/
+native/dist/
+native/.swiftpm/
+DerivedData/
 *.pkg
 # Logs
 logs
