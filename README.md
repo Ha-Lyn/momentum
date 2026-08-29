@@ -12,6 +12,8 @@ The active implementation is the native macOS app in [`native/`](native/).
 - Native Swift menu bar application
 - Global shortcut: `Command + Shift + Space`
 - Local microphone recording
+- Optional system-audio recording through ScreenCaptureKit
+- Independently selectable Input and Output audio channels
 - Local Parakeet TDT v3 transcription through FluidAudio
 - Portuguese, English, and automatic language modes
 - Markdown output in `~/Documents/Momentum Eigenvalues`
@@ -27,7 +29,7 @@ kept for reference and is not the primary implementation.
 
 - macOS 14 or newer
 - Swift 6
-- Microphone permission
+- Microphone and Screen Recording permissions
 - Internet access for the initial model download
 
 ## Run From Source
@@ -61,9 +63,16 @@ Each capture is saved under:
 ~/Documents/Momentum Eigenvalues/
 ```
 
-The directory contains the recorded `.m4a` file and a matching `.md` file with
-the transcription. If transcription fails, Momentum writes a matching
-`.transcription-error.txt` file so the recording is not silently lost.
+The directory contains separate `input-...m4a` and `output-...m4a` recordings
+for the enabled channels, each with a matching `.md` transcription. If
+transcription fails, Momentum writes a matching `.transcription-error.txt` file
+so the recording is not silently lost.
+
+Use the status menu's Options > Audio Channels submenu to select Input, Output,
+or both. The selection is remembered and defaults to Input only. Output uses
+macOS ScreenCaptureKit to capture all system audio and requires Screen
+Recording permission; both permissions are requested when Momentum launches,
+not when a recording starts.
 
 ## Local Model
 

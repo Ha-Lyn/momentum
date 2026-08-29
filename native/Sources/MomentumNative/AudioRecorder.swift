@@ -53,13 +53,13 @@ final class AudioRecorder: NSObject {
         }
     }
 
-    func startCapture() throws {
+    func startCapture(timestamp: Date) throws {
         if recorder?.isRecording == true {
             throw AudioRecorderError.alreadyRecording
         }
 
         let captureDirectory = try makeCaptureDirectory()
-        let audioURL = captureDirectory.appendingPathComponent("momentum-capture-\(Self.timestampString()).m4a")
+        let audioURL = captureDirectory.appendingPathComponent("input-momentum-capture-\(Self.timestampString(timestamp)).m4a")
 
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -117,10 +117,10 @@ final class AudioRecorder: NSObject {
         return captureDirectory
     }
 
-    private static func timestampString() -> String {
+    private static func timestampString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        return formatter.string(from: date).replacingOccurrences(of: ":", with: "-")
     }
 }
 

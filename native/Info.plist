@@ -24,6 +24,8 @@
   <false/>
   <key>NSMicrophoneUsageDescription</key>
   <string>Momentum records short voice notes and transcribes them into local markdown files.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Momentum captures system audio and transcribes it into local markdown files.</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>
