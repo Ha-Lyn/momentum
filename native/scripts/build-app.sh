@@ -38,6 +38,7 @@ if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
     --force \
     --options runtime \
     --timestamp \
+    --entitlements "$ROOT_DIR/MomentumNative.entitlements" \
     --sign "$CODESIGN_IDENTITY" \
     "$APP_DIR"
   echo "Signed $APP_DIR with $CODESIGN_IDENTITY"

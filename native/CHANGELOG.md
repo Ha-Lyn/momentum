@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased — CoreAudio process taps replace Screen Recording
+
+### Fixed
+
+- The app is now signed with a `com.apple.security.device.audio-input`
+  entitlement (`MomentumNative.entitlements`). The hardened runtime requires
+  it for microphone and system audio access; without it TCC silently refused
+  to even show the permission prompts.
+- Fixed a crash (`EXC_BREAKPOINT` in `dispatch_assert_queue`) when starting a
+  recording: the CoreAudio IO callback was created inside a `@MainActor`
+  method, so Swift 6 tagged it main-actor-isolated and trapped when CoreAudio
+  invoked it on its IO thread. The callback is now built in a nonisolated
+  context.
+
+### Changed
+
+- System audio capture now uses CoreAudio process taps
+  (`AudioHardwareCreateProcessTap` + aggregate device) instead of
+  ScreenCaptureKit. The app now only needs the lightweight "System Audio
+  Recording Only" permission (System Settings > Privacy & Security > Screen &
+  System Audio Recording) instead of full Screen Recording, and no longer
+  captures any video.
+- The tap is a mono global mixdown of all processes, so no stereo-to-mono
+  conversion is needed before transcription.
+- Minimum macOS version raised from 14.0 to 15.0 (the dedicated system-audio
+  permission requires macOS 14.4+).
+- `Info.plist` uses `NSAudioCaptureUsageDescription` instead of
+  `NSScreenCaptureUsageDescription`.
+- Xcode user data (`xcuserdata/`, `.xcuserstate`), SwiftPM build output, and
+  `native/dist/` are now git-ignored.
+
 ## 2026-08-29 — Output audio channel (system audio capture)
 
 ### Added
