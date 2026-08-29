@@ -9,6 +9,9 @@ native/.build/
 native/dist/
 native/.swiftpm/
 DerivedData/
+
+# Experimental Xcode project (local only; SwiftPM is the source of truth)
+native/Momentum/
 *.pkg
 # Logs
 logs
