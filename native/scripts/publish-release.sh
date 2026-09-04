@@ -12,6 +12,11 @@ GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-Ha-Lyn/momentum}"
 PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN:-0}"
 VERSION_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
 
+fail() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
 usage() {
   echo "Usage: $PROGRAM_NAME VERSION" >&2
 }
@@ -23,15 +28,13 @@ fi
 
 VERSION="$1"
 if [[ ! "$VERSION" =~ $VERSION_PATTERN ]]; then
-  echo "Error: invalid version '$VERSION'" >&2
   usage
-  exit 1
+  fail "invalid version '$VERSION'"
 fi
 
 for tool in gh swift codesign ditto lipo shasum; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "Error: required command not found: $tool" >&2
-    exit 1
+    fail "required command not found: $tool"
   fi
 done
 
@@ -40,15 +43,13 @@ if [[ "$PUBLISH_DRY_RUN" != "1" ]]; then
 fi
 
 if [[ "${CODESIGN_IDENTITY:-}" == "-" ]]; then
-  echo "Error: an ad-hoc codesigning identity cannot be used for a release" >&2
-  exit 1
+  fail "an ad-hoc codesigning identity cannot be used for a release"
 fi
 
 APP_VERSION="$VERSION" REQUIRE_CODE_SIGNATURE=1 "$BUILD_SCRIPT"
 
 if [[ ! -d "$APP_PATH" ]]; then
-  echo "Error: expected app bundle was not built: $APP_PATH" >&2
-  exit 1
+  fail "expected app bundle was not built: $APP_PATH"
 fi
 
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
@@ -59,35 +60,29 @@ EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$INFO_
 EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
 if [[ "$BUNDLE_IDENTIFIER" != "com.momentum.native" ]]; then
-  echo "Error: unexpected bundle identifier: $BUNDLE_IDENTIFIER" >&2
-  exit 1
+  fail "unexpected bundle identifier: $BUNDLE_IDENTIFIER"
 fi
 
 if [[ "$SHORT_VERSION" != "$VERSION" || "$BUNDLE_VERSION" != "$VERSION" ]]; then
-  echo "Error: app version does not match $VERSION (short=$SHORT_VERSION, bundle=$BUNDLE_VERSION)" >&2
-  exit 1
+  fail "app version does not match $VERSION (short=$SHORT_VERSION, bundle=$BUNDLE_VERSION)"
 fi
 
 if [[ ! -x "$EXECUTABLE_PATH" ]]; then
-  echo "Error: expected app executable was not built: $EXECUTABLE_PATH" >&2
-  exit 1
+  fail "expected app executable was not built: $EXECUTABLE_PATH"
 fi
 
 if ! EXECUTABLE_ARCHITECTURES=$(lipo -archs "$EXECUTABLE_PATH" 2>/dev/null); then
-  echo "Error: could not inspect release executable architecture: $EXECUTABLE_PATH" >&2
-  exit 1
+  fail "could not inspect release executable architecture: $EXECUTABLE_PATH"
 fi
 
 if [[ "$EXECUTABLE_ARCHITECTURES" != "arm64" ]]; then
-  echo "Error: release executable must be arm64-only (found: $EXECUTABLE_ARCHITECTURES)" >&2
-  exit 1
+  fail "release executable must be arm64-only (found: $EXECUTABLE_ARCHITECTURES)"
 fi
 
 codesign --verify --deep --strict "$APP_PATH"
 SIGNATURE_DETAILS=$(codesign -dvv "$APP_PATH" 2>&1)
 if [[ "$SIGNATURE_DETAILS" == *"Signature=adhoc"* ]]; then
-  echo "Error: release app has an ad-hoc signature" >&2
-  exit 1
+  fail "release app has an ad-hoc signature"
 fi
 
 STAGING_DIR=$(mktemp -d "${TMPDIR:-/tmp}/momentum-release.XXXXXX")

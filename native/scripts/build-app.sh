@@ -42,25 +42,27 @@ if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
   fi
 fi
 
+sign_app_bundle() {
+  local identity="$1"
+  local -a args=(
+    --force
+    --options runtime
+    --entitlements "$ROOT_DIR/MomentumNative.entitlements"
+  )
+  if [[ "$identity" != "-" ]]; then
+    args+=(--timestamp)
+  fi
+  codesign "${args[@]}" --sign "$identity" "$APP_DIR"
+}
+
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --entitlements "$ROOT_DIR/MomentumNative.entitlements" \
-    --sign "$CODESIGN_IDENTITY" \
-    "$APP_DIR"
+  sign_app_bundle "$CODESIGN_IDENTITY"
   echo "Signed $APP_DIR with $CODESIGN_IDENTITY"
 elif [[ "${REQUIRE_CODE_SIGNATURE:-}" == "1" ]]; then
   echo "Error: no codesigning identity found and REQUIRE_CODE_SIGNATURE=1" >&2
   exit 1
 elif [[ "${ALLOW_ADHOC_SIGNING:-}" == "1" ]]; then
-  codesign \
-    --force \
-    --options runtime \
-    --entitlements "$ROOT_DIR/MomentumNative.entitlements" \
-    --sign "-" \
-    "$APP_DIR"
+  sign_app_bundle "-"
   echo "Ad-hoc signed $APP_DIR (ALLOW_ADHOC_SIGNING=1)"
 else
   echo "Warning: no codesigning identity found; the app is ad-hoc signed and macOS permissions will reset after every rebuild."

@@ -8,11 +8,15 @@ APP_NAME="Momentum.app"
 BUNDLE_IDENTIFIER="com.momentum.native"
 EXECUTABLE_NAME="MomentumNative"
 MINIMUM_MACOS_MAJOR=15
-VERSION_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.-]+)?$'
+VERSION_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
 
 error() {
   echo "Error: $*" >&2
   exit 1
+}
+
+path_exists() {
+  [[ -e "$1" || -L "$1" ]]
 }
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -69,22 +73,22 @@ cleanup() {
 
   if (( REPLACEMENT_STARTED == 1 && INSTALL_COMPLETE == 0 )); then
     if (( HAD_EXISTING_APP == 1 )); then
-      if [[ -e "$BACKUP_APP" || -L "$BACKUP_APP" ]]; then
+      if path_exists "$BACKUP_APP"; then
         if ! rm -rf "$DESTINATION_APP"; then
           echo "Error: could not remove the incomplete installation at $DESTINATION_APP" >&2
         fi
-        if [[ -e "$DESTINATION_APP" || -L "$DESTINATION_APP" ]]; then
+        if path_exists "$DESTINATION_APP"; then
           echo "Error: the previous Momentum app is preserved at $BACKUP_APP" >&2
         elif ! mv "$BACKUP_APP" "$DESTINATION_APP"; then
           echo "Error: installation failed and the previous Momentum app could not be restored from $BACKUP_APP" >&2
         fi
-      elif [[ ! -e "$DESTINATION_APP" && ! -L "$DESTINATION_APP" ]]; then
+      elif ! path_exists "$DESTINATION_APP"; then
         echo "Error: installation failed and the previous Momentum app could not be found." >&2
       fi
     elif ! rm -rf "$DESTINATION_APP"; then
       echo "Warning: the incomplete installation could not be removed from $DESTINATION_APP" >&2
     fi
-  elif [[ -e "$BACKUP_APP" || -L "$BACKUP_APP" ]]; then
+  elif path_exists "$BACKUP_APP"; then
     if ! rm -rf "$BACKUP_APP"; then
       echo "Warning: the previous Momentum backup could not be removed from $BACKUP_APP" >&2
     fi
@@ -187,7 +191,7 @@ mv "$EXTRACTED_APP" "$STAGED_APP" ||
   error "Could not prepare Momentum in $INSTALL_DIR. Check the folder's permissions."
 
 echo "Installing Momentum in $INSTALL_DIR..."
-if [[ -e "$DESTINATION_APP" || -L "$DESTINATION_APP" ]]; then
+if path_exists "$DESTINATION_APP"; then
   HAD_EXISTING_APP=1
 fi
 
