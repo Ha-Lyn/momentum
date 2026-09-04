@@ -51,24 +51,64 @@ STAGED_APP="$INSTALL_DIR/.Momentum.app.install.$$"
 BACKUP_APP="$INSTALL_DIR/.Momentum.app.backup.$$"
 REPLACEMENT_STARTED=0
 INSTALL_COMPLETE=0
+HAD_EXISTING_APP=0
 
 cleanup() {
   status=$?
-  rm -rf "$TEMP_DIR" "$STAGED_APP"
+  trap - EXIT HUP INT TERM
+  set +e
+
+  if ! rm -rf "$TEMP_DIR" "$STAGED_APP"; then
+    echo "Warning: some temporary installer files could not be removed." >&2
+  fi
 
   if (( REPLACEMENT_STARTED == 1 && INSTALL_COMPLETE == 0 )); then
-    rm -rf "$DESTINATION_APP"
-    if [[ -e "$BACKUP_APP" || -L "$BACKUP_APP" ]] &&
-      ! mv "$BACKUP_APP" "$DESTINATION_APP"; then
-      echo "Error: installation failed and the previous Momentum app could not be restored from $BACKUP_APP" >&2
+    if (( HAD_EXISTING_APP == 1 )); then
+      if [[ -e "$BACKUP_APP" || -L "$BACKUP_APP" ]]; then
+        if ! rm -rf "$DESTINATION_APP"; then
+          echo "Error: could not remove the incomplete installation at $DESTINATION_APP" >&2
+        fi
+        if [[ -e "$DESTINATION_APP" || -L "$DESTINATION_APP" ]]; then
+          echo "Error: the previous Momentum app is preserved at $BACKUP_APP" >&2
+        elif ! mv "$BACKUP_APP" "$DESTINATION_APP"; then
+          echo "Error: installation failed and the previous Momentum app could not be restored from $BACKUP_APP" >&2
+        fi
+      elif [[ ! -e "$DESTINATION_APP" && ! -L "$DESTINATION_APP" ]]; then
+        echo "Error: installation failed and the previous Momentum app could not be found." >&2
+      fi
+    elif ! rm -rf "$DESTINATION_APP"; then
+      echo "Warning: the incomplete installation could not be removed from $DESTINATION_APP" >&2
     fi
   elif [[ -e "$BACKUP_APP" || -L "$BACKUP_APP" ]]; then
-    rm -rf "$BACKUP_APP"
+    if ! rm -rf "$BACKUP_APP"; then
+      echo "Warning: the previous Momentum backup could not be removed from $BACKUP_APP" >&2
+    fi
   fi
 
   exit "$status"
 }
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+is_momentum_running() {
+  local executable_path="$DESTINATION_APP/Contents/MacOS/$EXECUTABLE_NAME"
+  local process_command
+  local process_list
+
+  if ! process_list="$(ps -ax -o command=)"; then
+    error "Could not check whether Momentum is running."
+  fi
+
+  while IFS= read -r process_command; do
+    case "$process_command" in
+      *"$executable_path"*) return 0 ;;
+    esac
+  done <<< "$process_list"
+
+  return 1
+}
 
 METADATA_URL="https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest"
 echo "Finding the latest Momentum release..."
@@ -133,8 +173,7 @@ if [[ "$SHORT_VERSION" != "$VERSION" || "$BUNDLE_VERSION" != "$VERSION" ]]; then
   error "Release version mismatch (expected $VERSION, found $SHORT_VERSION / $BUNDLE_VERSION)."
 fi
 
-if [[ -d "$DESTINATION_APP" ]] &&
-  /usr/bin/pgrep -f "$DESTINATION_APP/Contents/MacOS/$EXECUTABLE_NAME" >/dev/null 2>&1; then
+if [[ -d "$DESTINATION_APP" ]] && is_momentum_running; then
   error "Momentum is running. Quit Momentum and run the installer again; the existing app was not changed."
 fi
 
@@ -144,18 +183,24 @@ mv "$EXTRACTED_APP" "$STAGED_APP" ||
 
 echo "Installing Momentum in $INSTALL_DIR..."
 if [[ -e "$DESTINATION_APP" || -L "$DESTINATION_APP" ]]; then
+  HAD_EXISTING_APP=1
+fi
+
+REPLACEMENT_STARTED=1
+if (( HAD_EXISTING_APP == 1 )); then
   mv "$DESTINATION_APP" "$BACKUP_APP" ||
     error "Could not prepare the existing Momentum app for replacement."
 fi
 
-REPLACEMENT_STARTED=1
 mv "$STAGED_APP" "$DESTINATION_APP" ||
   error "Could not replace Momentum. The installer will restore the previous app."
 xattr -dr com.apple.quarantine "$DESTINATION_APP" ||
   error "Could not remove the quarantine attribute. The installer will restore the previous app."
 
 INSTALL_COMPLETE=1
-rm -rf "$BACKUP_APP"
+if ! rm -rf "$BACKUP_APP"; then
+  echo "Warning: Momentum was installed, but its previous backup remains at $BACKUP_APP" >&2
+fi
 
 if ! open "$DESTINATION_APP"; then
   echo "Momentum was installed, but macOS could not launch it automatically." >&2
