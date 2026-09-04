@@ -134,5 +134,7 @@ After publishing, friends can install with:
 curl -fsSL https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
 ```
 
+Published releases are built for arm64 Apple Silicon Macs only.
+
 See the project [`README.md`](../README.md) for first-launch approval, privacy
 permissions, upgrade, and uninstall instructions.

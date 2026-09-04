@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/instal
 The installer downloads the latest GitHub Release, verifies its SHA-256
 checksum, replaces `/Applications/Momentum.app`, removes the download
 quarantine attribute, and launches Momentum. It requires macOS 15 or newer on
-`arm64` or `x86_64` Macs and uses only standard macOS tools plus `curl`.
+an arm64 Apple Silicon Mac and uses only standard macOS tools plus `curl`.
 
 To install somewhere else (for example during testing):
 

@@ -27,8 +27,13 @@ fi
 
 ARCHITECTURE="$(uname -m)"
 case "$ARCHITECTURE" in
-  arm64|x86_64) ;;
-  *) error "Unsupported Mac architecture: $ARCHITECTURE. Momentum supports arm64 and x86_64 Macs." ;;
+  arm64) ;;
+  x86_64)
+    error "Momentum requires an arm64 Apple Silicon Mac. Intel (x86_64) Macs are not supported."
+    ;;
+  *)
+    error "Unsupported Mac architecture: $ARCHITECTURE. Momentum requires an arm64 Apple Silicon Mac."
+    ;;
 esac
 
 for tool in curl ditto shasum xattr open; do
