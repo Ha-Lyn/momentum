@@ -19,7 +19,16 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$BUILD_DIR/MomentumNative" "$MACOS_DIR/MomentumNative"
-cp "$ROOT_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+
+INFO_PLIST_SRC="$ROOT_DIR/Info.plist"
+INFO_PLIST_TMP="$BUILD_DIR/Info.plist"
+cp "$INFO_PLIST_SRC" "$INFO_PLIST_TMP"
+if [[ -n "${APP_VERSION:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$INFO_PLIST_TMP"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_VERSION" "$INFO_PLIST_TMP"
+fi
+cp "$INFO_PLIST_TMP" "$CONTENTS_DIR/Info.plist"
+
 cp "$ROOT_DIR/../app/P1.png" "$RESOURCES_DIR/P1.png"
 
 # A stable signing identity is required for macOS TCC permissions (e.g. Screen
@@ -42,6 +51,17 @@ if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
     --sign "$CODESIGN_IDENTITY" \
     "$APP_DIR"
   echo "Signed $APP_DIR with $CODESIGN_IDENTITY"
+elif [[ "${ALLOW_ADHOC_SIGNING:-}" == "1" ]]; then
+  codesign \
+    --force \
+    --options runtime \
+    --entitlements "$ROOT_DIR/MomentumNative.entitlements" \
+    --sign "-" \
+    "$APP_DIR"
+  echo "Ad-hoc signed $APP_DIR (ALLOW_ADHOC_SIGNING=1)"
+elif [[ "${REQUIRE_CODE_SIGNATURE:-}" == "1" ]]; then
+  echo "Error: no codesigning identity found and REQUIRE_CODE_SIGNATURE=1" >&2
+  exit 1
 else
   echo "Warning: no codesigning identity found; the app is ad-hoc signed and macOS permissions will reset after every rebuild."
 fi
