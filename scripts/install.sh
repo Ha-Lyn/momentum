@@ -129,7 +129,7 @@ fi
 
 ZIP_NAME="Momentum-$VERSION.zip"
 CHECKSUM_NAME="Momentum-$VERSION.sha256"
-DOWNLOAD_BASE="https://github.com/$GITHUB_REPOSITORY/releases/latest/download"
+DOWNLOAD_BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME"
 ZIP_PATH="$TEMP_DIR/$ZIP_NAME"
 CHECKSUM_PATH="$TEMP_DIR/$CHECKSUM_NAME"
 

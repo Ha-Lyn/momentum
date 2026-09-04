@@ -28,7 +28,7 @@ if [[ ! "$VERSION" =~ $VERSION_PATTERN ]]; then
   exit 1
 fi
 
-for tool in gh swift codesign ditto shasum; do
+for tool in gh swift codesign ditto lipo shasum; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Error: required command not found: $tool" >&2
     exit 1
@@ -55,6 +55,8 @@ INFO_PLIST="$APP_PATH/Contents/Info.plist"
 BUNDLE_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST")
 SHORT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
 BUNDLE_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
+EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$INFO_PLIST")
+EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
 if [[ "$BUNDLE_IDENTIFIER" != "com.momentum.native" ]]; then
   echo "Error: unexpected bundle identifier: $BUNDLE_IDENTIFIER" >&2
@@ -63,6 +65,21 @@ fi
 
 if [[ "$SHORT_VERSION" != "$VERSION" || "$BUNDLE_VERSION" != "$VERSION" ]]; then
   echo "Error: app version does not match $VERSION (short=$SHORT_VERSION, bundle=$BUNDLE_VERSION)" >&2
+  exit 1
+fi
+
+if [[ ! -x "$EXECUTABLE_PATH" ]]; then
+  echo "Error: expected app executable was not built: $EXECUTABLE_PATH" >&2
+  exit 1
+fi
+
+if ! EXECUTABLE_ARCHITECTURES=$(lipo -archs "$EXECUTABLE_PATH" 2>/dev/null); then
+  echo "Error: could not inspect release executable architecture: $EXECUTABLE_PATH" >&2
+  exit 1
+fi
+
+if [[ "$EXECUTABLE_ARCHITECTURES" != "arm64" ]]; then
+  echo "Error: release executable must be arm64-only (found: $EXECUTABLE_ARCHITECTURES)" >&2
   exit 1
 fi
 
@@ -96,17 +113,24 @@ CHECKSUM_PATH="$VERSION_RELEASE_DIR/$CHECKSUM_NAME"
 cp "$STAGED_ZIP" "$ZIP_PATH"
 cp "$STAGED_CHECKSUM" "$CHECKSUM_PATH"
 
+RELEASE_COMMAND=(
+  gh release create "v$VERSION"
+  "$ZIP_PATH" "$CHECKSUM_PATH"
+  --repo "$GITHUB_REPOSITORY"
+  --title "Momentum $VERSION"
+  --generate-notes
+)
+if [[ "$VERSION" == *-* ]]; then
+  RELEASE_COMMAND+=(--prerelease)
+fi
+
 if [[ "$PUBLISH_DRY_RUN" == "1" ]]; then
   echo "Dry run: staged $ZIP_PATH"
   echo "Dry run: staged $CHECKSUM_PATH"
   echo "Dry run: would create tag v$VERSION"
-  printf 'gh release create %q %q %q --repo %q --title %q --generate-notes\n' \
-    "v$VERSION" "$ZIP_PATH" "$CHECKSUM_PATH" "$GITHUB_REPOSITORY" "Momentum $VERSION"
+  printf '%q ' "${RELEASE_COMMAND[@]}"
+  printf '\n'
   exit 0
 fi
 
-gh release create "v$VERSION" \
-  "$ZIP_PATH" "$CHECKSUM_PATH" \
-  --repo "$GITHUB_REPOSITORY" \
-  --title "Momentum $VERSION" \
-  --generate-notes
+"${RELEASE_COMMAND[@]}"

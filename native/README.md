@@ -66,7 +66,7 @@ gh auth login
 gh auth status
 ```
 
-The publish script also requires `swift`, `codesign`, `ditto`, and `shasum`.
+The publish script also requires `swift`, `codesign`, `ditto`, `lipo`, and `shasum`.
 Release builds refuse ad-hoc signatures; you need an Apple Development or
 Developer ID Application identity in your login keychain.
 
@@ -107,6 +107,9 @@ This builds `dist/Momentum.app` with `APP_VERSION=1.2.3`, verifies the bundle
 identifier (`com.momentum.native`), checks the signature, and creates a
 GitHub Release tagged `v1.2.3` on `Ha-Lyn/momentum` (override with
 `GITHUB_REPOSITORY`).
+
+Versions with a prerelease suffix, such as `1.2.3-rc.1`, are published as
+GitHub prereleases and do not replace the installer's latest stable release.
 
 Expected release assets:
 
