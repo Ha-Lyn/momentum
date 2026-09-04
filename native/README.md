@@ -49,3 +49,81 @@ first transcription. Audio inference runs locally after the model is cached.
 Input and Output are captured into separate files. Their names begin with
 `input-` and `output-`, respectively, and each file receives its own Markdown
 transcription.
+
+## Publish a release
+
+Publication is manual. The publisher builds a versioned, signed app bundle,
+stages release assets locally, and creates a GitHub Release with the GitHub
+CLI.
+
+### Prerequisites
+
+Install and authenticate the GitHub CLI:
+
+```bash
+brew install gh
+gh auth login
+gh auth status
+```
+
+The publish script also requires `swift`, `codesign`, `ditto`, and `shasum`.
+Release builds refuse ad-hoc signatures; you need an Apple Development or
+Developer ID Application identity in your login keychain.
+
+List available signing identities:
+
+```bash
+security find-identity -v -p codesigning
+```
+
+To pin a specific identity:
+
+```bash
+CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/publish-release.sh 1.2.3
+```
+
+If `CODESIGN_IDENTITY` is unset, `build-app.sh` auto-detects the first
+Developer ID Application or Apple Development identity.
+
+### Publish
+
+From this directory, pass a semantic version (`MAJOR.MINOR.PATCH`, with an
+optional prerelease suffix):
+
+```bash
+./scripts/publish-release.sh 1.2.3
+```
+
+This builds `dist/Momentum.app` with `APP_VERSION=1.2.3`, verifies the bundle
+identifier (`com.momentum.native`), checks the signature, and creates a
+GitHub Release tagged `v1.2.3` on `Ha-Lyn/momentum` (override with
+`GITHUB_REPOSITORY`).
+
+Expected release assets:
+
+- `Momentum-1.2.3.zip` — signed app archive
+- `Momentum-1.2.3.sha256` — SHA-256 checksum for the ZIP
+
+Local copies are retained under `native/dist/releases/1.2.3/`.
+
+### Dry run
+
+Build and stage assets without creating a release:
+
+```bash
+PUBLISH_DRY_RUN=1 ./scripts/publish-release.sh 1.2.3
+```
+
+Dry run skips `gh auth status` and prints the staged paths plus the `gh release
+create` command that would run.
+
+### Share with friends
+
+After publishing, friends can install with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
+```
+
+See the project [`README.md`](../README.md) for first-launch approval, privacy
+permissions, upgrade, and uninstall instructions.

@@ -27,10 +27,12 @@ kept for reference and is not the primary implementation.
 
 ## Requirements
 
-- macOS 14 or newer
-- Swift 6
-- Microphone and Screen Recording permissions
-- Internet access for the initial model download
+- macOS 15 or newer
+- Microphone and System Audio Recording permissions
+- Internet access for the initial model download and for installing from GitHub
+  Releases
+
+Developers building from source also need Swift 6.
 
 ## Run From Source
 
@@ -54,6 +56,57 @@ open dist/Momentum.app
 ```
 
 The generated application is written to `native/dist/Momentum.app`.
+
+## Install
+
+Install the latest published release into `/Applications` with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
+```
+
+The installer downloads the latest GitHub Release, verifies its SHA-256
+checksum, replaces `/Applications/Momentum.app`, removes the download
+quarantine attribute, and launches Momentum. It requires macOS 15 or newer on
+`arm64` or `x86_64` Macs and uses only standard macOS tools plus `curl`.
+
+To install somewhere else (for example during testing):
+
+```bash
+INSTALL_DIR="$HOME/Applications" curl -fsSL \
+  https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
+```
+
+### First launch and permissions
+
+On first launch, macOS may block the app because release builds are signed
+with Apple Development, not notarized with Developer ID. If that happens, open
+**System Settings > Privacy & Security** and choose **Open Anyway** for
+Momentum.
+
+Momentum requests access when it launches:
+
+- **System Settings > Privacy & Security > Microphone**
+- **System Settings > Privacy & Security > Screen & System Audio Recording**
+  (System Audio Recording Only)
+
+The installer cannot grant these permissions for you. Because releases use
+Apple Development signing from a free Apple Developer account, they are not
+notarized; friends may need the manual approval step above.
+
+### Upgrade and uninstall
+
+To upgrade, quit Momentum and run the install command again. The installer
+verifies the new archive before replacing the existing app and refuses to
+change a running installation.
+
+To uninstall:
+
+```bash
+rm -rf /Applications/Momentum.app
+```
+
+Maintainer release instructions are in [`native/README.md`](native/README.md).
 
 ## Output
 
@@ -96,6 +149,10 @@ native/
   Package.swift                         Swift package definition
   Sources/MomentumNative/               Native macOS application
   scripts/build-app.sh                  .app bundle builder
+  scripts/publish-release.sh            Manual GitHub Release publisher
+
+scripts/
+  install.sh                            One-command release installer
 
 app/
   src/                                  Electron prototype source
