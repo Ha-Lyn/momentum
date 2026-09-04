@@ -12,7 +12,7 @@ The active implementation is the native macOS app in [`native/`](native/).
 - Native Swift menu bar application
 - Global shortcut: `Command + Shift + Space`
 - Local microphone recording
-- Optional system-audio recording through ScreenCaptureKit
+- Optional system-audio recording through a CoreAudio process tap
 - Independently selectable Input and Output audio channels
 - Local Parakeet TDT v3 transcription through FluidAudio
 - Portuguese, English, and automatic language modes
@@ -126,10 +126,10 @@ so the recording is not silently lost.
 
 Use the status menu's Options > Audio Channels submenu to select Input, Output,
 or both. The selection is remembered and defaults to Input only. Output uses
-macOS ScreenCaptureKit to capture all system audio and requires System Audio
+a CoreAudio process tap to capture system audio and requires System Audio
 Recording Only permission (System Settings > Privacy & Security > Screen &
-System Audio Recording). Both permissions are requested when Momentum launches,
-not when a recording starts.
+System Audio Recording), not full Screen Recording. Both permissions are
+requested when Momentum launches, not when a recording starts.
 
 ## Local Model
 
