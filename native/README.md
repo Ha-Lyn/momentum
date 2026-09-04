@@ -76,14 +76,23 @@ List available signing identities:
 security find-identity -v -p codesigning
 ```
 
-To pin a specific identity:
+Set `CODESIGN_IDENTITY` to choose one explicitly, or leave it unset and
+`build-app.sh` auto-detects the first Developer ID Application or Apple
+Development identity in your login keychain. Either identity type works for
+publishing; Developer ID is required for distribution outside manual approval,
+and notarization is a separate step this script does not run.
+
+A free Apple Developer account provides Apple Development signing only. It
+does not include Developer ID Application certificates or Apple notarization.
+Friends installing builds signed that way may need to approve the app manually
+on first launch (see the project [`README.md`](../README.md)).
+
+Examples:
 
 ```bash
 CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/publish-release.sh 1.2.3
+CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/publish-release.sh 1.2.3
 ```
-
-If `CODESIGN_IDENTITY` is unset, `build-app.sh` auto-detects the first
-Developer ID Application or Apple Development identity.
 
 ### Publish
 

@@ -73,14 +73,16 @@ quarantine attribute, and launches Momentum. It requires macOS 15 or newer on
 To install somewhere else (for example during testing):
 
 ```bash
-INSTALL_DIR="$HOME/Applications" curl -fsSL \
-  https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
+curl -fsSL \
+  https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | \
+  INSTALL_DIR="$HOME/Applications" bash
 ```
 
 ### First launch and permissions
 
-On first launch, macOS may block the app because release builds are signed
-with Apple Development, not notarized with Developer ID. If that happens, open
+On first launch, macOS may block the app when a release is signed with Apple
+Development and is not notarized. Publisher builds signed with Developer ID can
+still require approval unless they were notarized. If macOS blocks launch, open
 **System Settings > Privacy & Security** and choose **Open Anyway** for
 Momentum.
 
@@ -90,9 +92,10 @@ Momentum requests access when it launches:
 - **System Settings > Privacy & Security > Screen & System Audio Recording**
   (System Audio Recording Only)
 
-The installer cannot grant these permissions for you. Because releases use
-Apple Development signing from a free Apple Developer account, they are not
-notarized; friends may need the manual approval step above.
+The installer cannot grant these permissions for you. A free Apple Developer
+account provides Apple Development signing only, not Developer ID distribution
+or Apple notarization; friends installing those builds may need the manual
+approval step above.
 
 ### Upgrade and uninstall
 
@@ -123,8 +126,9 @@ so the recording is not silently lost.
 
 Use the status menu's Options > Audio Channels submenu to select Input, Output,
 or both. The selection is remembered and defaults to Input only. Output uses
-macOS ScreenCaptureKit to capture all system audio and requires Screen
-Recording permission; both permissions are requested when Momentum launches,
+macOS ScreenCaptureKit to capture all system audio and requires System Audio
+Recording Only permission (System Settings > Privacy & Security > Screen &
+System Audio Recording). Both permissions are requested when Momentum launches,
 not when a recording starts.
 
 ## Local Model
