@@ -51,6 +51,9 @@ if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
     --sign "$CODESIGN_IDENTITY" \
     "$APP_DIR"
   echo "Signed $APP_DIR with $CODESIGN_IDENTITY"
+elif [[ "${REQUIRE_CODE_SIGNATURE:-}" == "1" ]]; then
+  echo "Error: no codesigning identity found and REQUIRE_CODE_SIGNATURE=1" >&2
+  exit 1
 elif [[ "${ALLOW_ADHOC_SIGNING:-}" == "1" ]]; then
   codesign \
     --force \
@@ -59,9 +62,6 @@ elif [[ "${ALLOW_ADHOC_SIGNING:-}" == "1" ]]; then
     --sign "-" \
     "$APP_DIR"
   echo "Ad-hoc signed $APP_DIR (ALLOW_ADHOC_SIGNING=1)"
-elif [[ "${REQUIRE_CODE_SIGNATURE:-}" == "1" ]]; then
-  echo "Error: no codesigning identity found and REQUIRE_CODE_SIGNATURE=1" >&2
-  exit 1
 else
   echo "Warning: no codesigning identity found; the app is ad-hoc signed and macOS permissions will reset after every rebuild."
 fi
