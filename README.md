@@ -12,7 +12,7 @@ The active implementation is the native macOS app in [`native/`](native/).
 - Native Swift menu bar application
 - Global shortcut: `Command + Shift + Space`
 - Local microphone recording
-- Optional system-audio recording through ScreenCaptureKit
+- Optional system-audio recording through a CoreAudio process tap
 - Independently selectable Input and Output audio channels
 - Local Parakeet TDT v3 transcription through FluidAudio
 - Portuguese, English, and automatic language modes
@@ -27,10 +27,12 @@ kept for reference and is not the primary implementation.
 
 ## Requirements
 
-- macOS 14 or newer
-- Swift 6
-- Microphone and Screen Recording permissions
-- Internet access for the initial model download
+- macOS 15 or newer
+- Microphone and System Audio Recording permissions
+- Internet access for the initial model download and for installing from GitHub
+  Releases
+
+Developers building from source also need Swift 6.
 
 ## Run From Source
 
@@ -55,6 +57,60 @@ open dist/Momentum.app
 
 The generated application is written to `native/dist/Momentum.app`.
 
+## Install
+
+Install the latest published release into `/Applications` with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | bash
+```
+
+The installer downloads the latest GitHub Release, verifies its SHA-256
+checksum, replaces `/Applications/Momentum.app`, removes the download
+quarantine attribute, and launches Momentum. It requires macOS 15 or newer on
+an arm64 Apple Silicon Mac and uses only standard macOS tools plus `curl`.
+
+To install somewhere else (for example during testing):
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/Ha-Lyn/momentum/main/scripts/install.sh | \
+  INSTALL_DIR="$HOME/Applications" bash
+```
+
+### First launch and permissions
+
+On first launch, macOS may block the app when a release is signed with Apple
+Development and is not notarized. Publisher builds signed with Developer ID can
+still require approval unless they were notarized. If macOS blocks launch, open
+**System Settings > Privacy & Security** and choose **Open Anyway** for
+Momentum.
+
+Momentum requests access when it launches:
+
+- **System Settings > Privacy & Security > Microphone**
+- **System Settings > Privacy & Security > Screen & System Audio Recording**
+  (System Audio Recording Only)
+
+The installer cannot grant these permissions for you. A free Apple Developer
+account provides Apple Development signing only, not Developer ID distribution
+or Apple notarization; friends installing those builds may need the manual
+approval step above.
+
+### Upgrade and uninstall
+
+To upgrade, quit Momentum and run the install command again. The installer
+verifies the new archive before replacing the existing app and refuses to
+change a running installation.
+
+To uninstall:
+
+```bash
+rm -rf /Applications/Momentum.app
+```
+
+Maintainer release instructions are in [`native/README.md`](native/README.md).
+
 ## Output
 
 Each capture is saved under:
@@ -70,9 +126,10 @@ so the recording is not silently lost.
 
 Use the status menu's Options > Audio Channels submenu to select Input, Output,
 or both. The selection is remembered and defaults to Input only. Output uses
-macOS ScreenCaptureKit to capture all system audio and requires Screen
-Recording permission; both permissions are requested when Momentum launches,
-not when a recording starts.
+a CoreAudio process tap to capture system audio and requires System Audio
+Recording Only permission (System Settings > Privacy & Security > Screen &
+System Audio Recording), not full Screen Recording. Both permissions are
+requested when Momentum launches, not when a recording starts.
 
 ## Local Model
 
@@ -96,6 +153,10 @@ native/
   Package.swift                         Swift package definition
   Sources/MomentumNative/               Native macOS application
   scripts/build-app.sh                  .app bundle builder
+  scripts/publish-release.sh            Manual GitHub Release publisher
+
+scripts/
+  install.sh                            One-command release installer
 
 app/
   src/                                  Electron prototype source
