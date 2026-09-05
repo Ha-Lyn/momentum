@@ -70,7 +70,7 @@ checksum, replaces `/Applications/Momentum.app`, removes the download
 quarantine attribute, and launches Momentum. It requires macOS 15 or newer on
 an arm64 Apple Silicon Mac and uses only standard macOS tools plus `curl`.
 
-To install somewhere else (for example during testing):
+To install somewhere else:
 
 ```bash
 curl -fsSL \
@@ -92,22 +92,13 @@ Momentum requests access when it launches:
 - **System Settings > Privacy & Security > Screen & System Audio Recording**
   (System Audio Recording Only)
 
-The installer cannot grant these permissions for you. A free Apple Developer
-account provides Apple Development signing only, not Developer ID distribution
-or Apple notarization; friends installing those builds may need the manual
-approval step above.
 
-### Upgrade and uninstall
+### Upgrade
 
 To upgrade, quit Momentum and run the install command again. The installer
 verifies the new archive before replacing the existing app and refuses to
 change a running installation.
 
-To uninstall:
-
-```bash
-rm -rf /Applications/Momentum.app
-```
 
 Maintainer release instructions are in [`native/README.md`](native/README.md).
 
