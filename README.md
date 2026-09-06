@@ -1,9 +1,9 @@
 # Momentum
 
-Momentum is a macOS voice-capture app for turning short spoken thoughts into
+Momentum is a macOS voice-capture app for turning spoken thoughts into
 local Markdown notes. The native Swift implementation records from the
 microphone, transcribes audio with a local Parakeet model, and writes the
-result next to the recording.
+result next to the recording. It also can record and transcribe system audio 
 
 ## Current Implementation
 
