@@ -30,36 +30,49 @@ private actor LocalTranscriptionEngine {
         _ = try await loadManager()
     }
 
-    func transcribe(audioURL: URL, language: TranscriptionLanguage) async throws -> String {
-        let manager = try await loadManager()
+    /// Tail of the transcription queue. `AsrManager` keeps internal state
+    /// across suspension points, and actor reentrancy would otherwise let a
+    /// quick transcription interleave with a long note transcription, so
+    /// transcriptions run strictly one after another.
+    private var queueTail: Task<Void, Never>?
 
-        do {
+    func transcribe(audioURL: URL, language: TranscriptionLanguage) async throws -> String {
+        try await serialized { manager in
             var decoderState = try TdtDecoderState()
-            let result = try await manager.transcribe(
+            return try await manager.transcribe(
                 audioURL,
                 decoderState: &decoderState,
                 language: language.fluidAudioValue
-            )
-            return result.text
-        } catch {
-            throw TranscriptionError.inferenceFailed(error)
+            ).text
         }
     }
 
     func transcribe(samples: [Float], language: TranscriptionLanguage) async throws -> String {
-        let manager = try await loadManager()
-
-        do {
+        try await serialized { manager in
             var decoderState = try TdtDecoderState()
-            let result = try await manager.transcribe(
+            return try await manager.transcribe(
                 samples,
                 decoderState: &decoderState,
                 language: language.fluidAudioValue
-            )
-            return result.text
-        } catch {
-            throw TranscriptionError.inferenceFailed(error)
+            ).text
         }
+    }
+
+    private func serialized(
+        _ work: @escaping @Sendable (AsrManager) async throws -> String
+    ) async throws -> String {
+        let previous = queueTail
+        let task = Task { () async throws -> String in
+            await previous?.value
+            let manager = try await self.loadManager()
+            do {
+                return try await work(manager)
+            } catch {
+                throw TranscriptionError.inferenceFailed(error)
+            }
+        }
+        queueTail = Task { _ = try? await task.value }
+        return try await task.value
     }
 
     private func loadManager() async throws -> AsrManager {
