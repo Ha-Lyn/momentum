@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased — Quick Transcribe (push-to-talk dictation)
+
+### Added
+
+- Quick Transcribe: hold `Option + Shift` to record the microphone, release to
+  transcribe locally and paste the text into the focused app. Audio is kept in
+  memory (`MicrophoneBufferRecorder`, 16 kHz mono) and nothing is saved.
+- Customizable push-to-talk shortcut (`PushToTalkShortcut`), persisted in
+  user defaults. Modifier-only shortcuts are detected with NSEvent monitors
+  and a 200 ms arm delay (a key press or click cancels, so normal
+  `Option + Shift + key` shortcuts keep working); modifiers + key shortcuts
+  use a Carbon hotkey with pressed/released events.
+- "Quick Transcribe Shortcut" window (`ShortcutRecorderWindowController`)
+  opened from the status menu: shows the current shortcut, records a new
+  one (modifier-only or modifiers + key, Esc cancels) and restores the
+  default. Global shortcuts are paused while recording so the keys do not
+  trigger a dictation or a note recording.
+- `TextInserter`: pastes through the clipboard with a synthesized
+  `Command + V` and verifies the result through the focused element's
+  Accessibility attributes. The previous clipboard is restored only when the
+  paste is confirmed; otherwise the transcript stays on the clipboard and the
+  pill asks the user to press `Command + V`.
+- `AccessibilityPermission`: lazy Accessibility request (never at launch),
+  a deep link to System Settings and polling so the shortcut starts working as
+  soon as access is granted (and stops if it is revoked).
+- Status menu items: "Quick Transcribe" toggle, "Quick Transcribe Shortcut…"
+  and "Grant Accessibility Access…" (only while access is missing).
+- Floating pill states for listening, transcribing and short auto-hiding
+  messages. Quick Transcribe errors are shown there instead of alerts, so
+  focus never leaves the target app.
+
+### Changed
+
+- A single `TranscriptionService` (one model instance) is shared by note
+  capture and Quick Transcribe; model loading is deduplicated, prewarmed at
+  launch and transcriptions are serialized. New
+  `transcribe(samples:language:)` API for in-memory audio.
+- `HotKeyManager` supports multiple hotkeys with press and release handlers.
+- Note capture and Quick Transcribe are mutually exclusive: push-to-talk is
+  ignored during a note recording, and Start Recording / `Command + Shift +
+  Space` are ignored while a quick transcription is running.
+
 ## Unreleased — CoreAudio process taps replace Screen Recording
 
 ### Fixed

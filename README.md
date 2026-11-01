@@ -11,6 +11,9 @@ The active implementation is the native macOS app in [`native/`](native/).
 
 - Native Swift menu bar application
 - Global shortcut: `Command + Shift + Space`
+- Quick Transcribe: hold `Option + Shift` (customizable) to dictate into any
+  app; the transcript is pasted into the focused text field and nothing is
+  saved
 - Local microphone recording
 - Optional system-audio recording through a CoreAudio process tap
 - Independently selectable Input and Output audio channels
@@ -29,6 +32,7 @@ kept for reference and is not the primary implementation.
 
 - macOS 15 or newer
 - Microphone and System Audio Recording permissions
+- Accessibility permission for Quick Transcribe (optional)
 - Internet access for the initial model download and for installing from GitHub
   Releases
 
@@ -92,6 +96,11 @@ Momentum requests access when it launches:
 - **System Settings > Privacy & Security > Screen & System Audio Recording**
   (System Audio Recording Only)
 
+Quick Transcribe additionally needs **System Settings > Privacy & Security >
+Accessibility**. It is never requested at launch: use the menu's **Grant
+Accessibility Access…** item (shown only while access is missing) or turn
+Quick Transcribe on to be prompted.
+
 
 ### Upgrade
 
@@ -121,6 +130,45 @@ a CoreAudio process tap to capture system audio and requires System Audio
 Recording Only permission (System Settings > Privacy & Security > Screen &
 System Audio Recording), not full Screen Recording. Both permissions are
 requested when Momentum launches, not when a recording starts.
+
+## Quick Transcribe
+
+Quick Transcribe is push-to-talk dictation into whatever app you are typing
+in:
+
+1. Focus a text field in any app.
+2. Hold `Option + Shift`. The floating pill shows "Listening..." while the
+   microphone records.
+3. Speak, then release the keys. The pill shows "Transcribing..." and the text
+   is pasted into the focused app.
+
+Details:
+
+- Nothing is saved: audio stays in memory and no Markdown file is written.
+- The shortcut can be changed from the status menu's **Quick Transcribe
+  Shortcut…** item. Record either a modifier-only shortcut (such as
+  `Option + Shift`) or modifiers plus a key (such as `Control + Option +
+  Space`); **Restore Default** goes back to `Option + Shift`.
+- With a modifier-only shortcut, the keys must be held briefly (about 200 ms)
+  before recording starts, so normal shortcuts like `Option + Shift + K` keep
+  working. Pressing another key while recording discards the recording, and
+  very short presses are ignored.
+- It always records the microphone, regardless of the Audio Channels
+  selection, and uses the selected transcription language.
+- Accessibility permission (System Settings > Privacy & Security >
+  Accessibility) is required both to detect the global shortcut and to paste.
+  Without it the feature stays inactive and the menu shows **Grant
+  Accessibility Access…**.
+- Clipboard: the text is pasted through the clipboard. When Momentum can
+  confirm the paste, your previous clipboard contents are restored. Otherwise
+  (for example in a password field or an app that does not expose its text
+  fields) the transcript stays on the clipboard so you can press `Command + V`
+  yourself.
+- Quick Transcribe is blocked while a note recording is in progress, and a
+  note recording cannot start while a quick transcription is running.
+- The first use needs the transcription model, which is downloaded
+  automatically (see [Local Model](#local-model)); later uses run locally.
+- Turn the feature on or off with the status menu's **Quick Transcribe** item.
 
 ## Local Model
 

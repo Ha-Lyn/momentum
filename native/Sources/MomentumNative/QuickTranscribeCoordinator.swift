@@ -37,6 +37,10 @@ final class QuickTranscribeCoordinator {
     private(set) var state = State.idle
     private(set) var isEnabled: Bool
     private(set) var shortcut: PushToTalkShortcut
+    /// True while the monitor is temporarily paused (e.g. while the
+    /// shortcut recorder window is capturing a new shortcut). Not persisted
+    /// and independent of `isEnabled`.
+    private(set) var isMonitoringSuspended = false
     private var targetApplication: NSRunningApplication?
 
     /// True while a quick transcription is in progress (not idle). Used to
@@ -88,10 +92,23 @@ final class QuickTranscribeCoordinator {
         refreshMonitor()
     }
 
+    /// Temporarily stops (or restarts) the push-to-talk monitor without
+    /// touching the persisted enabled setting. Used while the shortcut
+    /// recorder is capturing keys, so pressing the current shortcut there
+    /// does not start a quick transcription.
+    func setMonitoringSuspended(_ suspended: Bool) {
+        guard suspended != isMonitoringSuspended else {
+            return
+        }
+        isMonitoringSuspended = suspended
+        quickTranscribeLog.info("Quick Transcribe monitoring suspended=\(suspended, privacy: .public)")
+        refreshMonitor()
+    }
+
     /// Validates, applies and persists a new shortcut. If the monitor is
-    /// running and the new shortcut cannot be registered (e.g. the hotkey
-    /// is taken by another app), the previous shortcut is restored and the
-    /// error is rethrown.
+    /// running (or would be running if not suspended) and the new shortcut
+    /// cannot be registered (e.g. the hotkey is taken by another app), the
+    /// previous shortcut is kept and the error is rethrown.
     func updateShortcut(_ newShortcut: PushToTalkShortcut) throws {
         if let validationError = newShortcut.validate() {
             throw validationError
@@ -101,14 +118,23 @@ final class QuickTranscribeCoordinator {
             return
         }
 
-        if monitor.isRunning {
+        // While suspended the monitor is stopped, but the new shortcut is
+        // still test-registered so registration errors surface right away.
+        let wasRunning = monitor.isRunning
+        let shouldVerify = wasRunning || (isMonitoringSuspended && isEnabled && AccessibilityPermission.isTrusted)
+        if shouldVerify {
             cancelRecordingIfNeeded()
             do {
                 try monitor.update(shortcut: newShortcut)
             } catch {
                 quickTranscribeLog.error("Failed to apply shortcut \(newShortcut.displayString, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                try? monitor.start(shortcut: shortcut)
+                if wasRunning {
+                    try? monitor.start(shortcut: shortcut)
+                }
                 throw error
+            }
+            if isMonitoringSuspended {
+                monitor.stop()
             }
         }
 
@@ -126,7 +152,7 @@ final class QuickTranscribeCoordinator {
     }
 
     private func refreshMonitor(trusted: Bool = AccessibilityPermission.isTrusted, forceRestart: Bool = false) {
-        guard isEnabled, trusted else {
+        guard isEnabled, trusted, !isMonitoringSuspended else {
             if monitor.isRunning {
                 cancelRecordingIfNeeded()
                 monitor.stop()

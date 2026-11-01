@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var quickTranscribeToggleItem: NSMenuItem?
     private var quickTranscribeShortcutItem: NSMenuItem?
     private var grantAccessibilityItem: NSMenuItem?
+    private var shortcutRecorderWindowController: ShortcutRecorderWindowController?
     private var isRecording = false
     private var isStartingRecording = false
 
@@ -257,19 +258,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     private func setupHotKey() {
-        let toggle = PushToTalkShortcut.noteToggle
-
         do {
-            try hotKeyManager.register(
-                id: HotKeyManager.noteToggleID,
-                keyCode: toggle.keyCode ?? 0,
-                modifiers: toggle.modifiers.carbonFlags,
-                onPress: { [weak self] in self?.toggleRecording() }
-            )
+            try registerNoteToggleHotKey()
         } catch {
             NSLog("Failed to register global hotkey: \(error.localizedDescription)")
             presentErrorAlert(message: error.localizedDescription)
         }
+    }
+
+    private func registerNoteToggleHotKey() throws {
+        let toggle = PushToTalkShortcut.noteToggle
+        try hotKeyManager.register(
+            id: HotKeyManager.noteToggleID,
+            keyCode: toggle.keyCode ?? 0,
+            modifiers: toggle.modifiers.carbonFlags,
+            onPress: { [weak self] in self?.toggleRecording() }
+        )
     }
 
     // MARK: Quick Transcribe
@@ -301,9 +305,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     @objc
     private func openShortcutSettings() {
-        // TODO(phase 6): open ShortcutRecorderWindowController and apply the
-        // result with quickTranscribeCoordinator.updateShortcut(_:).
-        appLog.info("Shortcut settings are not available yet")
+        if shortcutRecorderWindowController == nil {
+            let controller = ShortcutRecorderWindowController()
+            controller.currentShortcut = { [weak self] in
+                self?.quickTranscribeCoordinator.shortcut ?? .default
+            }
+            controller.applyShortcut = { [weak self] shortcut in
+                try self?.quickTranscribeCoordinator.updateShortcut(shortcut)
+            }
+            controller.onShortcutChanged = { [weak self] in
+                self?.refreshQuickTranscribeMenuState()
+            }
+            controller.onRecordingChanged = { [weak self] recording in
+                self?.setGlobalShortcutsSuspended(recording)
+            }
+            shortcutRecorderWindowController = controller
+        }
+
+        shortcutRecorderWindowController?.present()
+    }
+
+    /// Pauses the push-to-talk monitor and the ⌘⇧Space note toggle while the
+    /// shortcut recorder captures keys: otherwise pressing the current
+    /// shortcut there would start a quick transcription or a note recording
+    /// (and Carbon hotkeys would swallow the keys before the recorder sees them).
+    private func setGlobalShortcutsSuspended(_ suspended: Bool) {
+        quickTranscribeCoordinator.setMonitoringSuspended(suspended)
+
+        if suspended {
+            hotKeyManager.unregister(id: HotKeyManager.noteToggleID)
+        } else {
+            do {
+                try registerNoteToggleHotKey()
+            } catch {
+                appLog.error("Failed to re-register the note recording hotkey: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     @objc
@@ -332,11 +369,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem === quickTranscribeShortcutItem {
-            // TODO(phase 6): enable once the shortcut recorder window exists.
-            return false
-        }
-
         if menuItem === toggleMenuItem {
             // Starting a note recording is blocked while a quick
             // transcription is in progress; stopping is always allowed.
