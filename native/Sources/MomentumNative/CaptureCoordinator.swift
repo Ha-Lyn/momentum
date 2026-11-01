@@ -27,11 +27,20 @@ enum CaptureCoordinatorError: LocalizedError {
 final class CaptureCoordinator {
     private let audioRecorder = AudioRecorder()
     private let outputAudioRecorder = OutputAudioRecorder()
-    private let transcriptionService = TranscriptionService()
+    private let transcriptionService: TranscriptionService
     private var selectedLanguage = TranscriptionLanguage.load()
     private var activeCaptureLanguage: TranscriptionLanguage?
     private var selectedChannels = AudioChannelSelection.load()
     private var activeChannels: Set<AudioChannel> = []
+
+    /// True between a successful `startCapture()` and the beginning of
+    /// `stopCapture()`. Used to keep note capture and quick transcribe
+    /// mutually exclusive.
+    private(set) var isRecording = false
+
+    init(transcriptionService: TranscriptionService) {
+        self.transcriptionService = transcriptionService
+    }
 
     func requestMicrophoneAccess() async throws {
         try await audioRecorder.requestMicrophoneAccess()
@@ -89,9 +98,11 @@ final class CaptureCoordinator {
 
         activeChannels = selectedChannels
         activeCaptureLanguage = selectedLanguage
+        isRecording = true
     }
 
     func stopCapture() async throws -> [CaptureResult] {
+        isRecording = false
         let language = activeCaptureLanguage ?? selectedLanguage
         activeCaptureLanguage = nil
         let channels = activeChannels

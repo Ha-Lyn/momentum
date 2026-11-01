@@ -2,7 +2,10 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let captureCoordinator = CaptureCoordinator()
+    /// Single shared transcription service (one model instance), reused by
+    /// note capture and quick transcribe.
+    private let transcriptionService: TranscriptionService
+    private let captureCoordinator: CaptureCoordinator
     private let floatingPillWindowController = FloatingPillWindowController()
     private let hotKeyManager = HotKeyManager()
 
@@ -15,6 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isRecording = false
     private var isStartingRecording = false
 
+    override init() {
+        let transcriptionService = TranscriptionService()
+        self.transcriptionService = transcriptionService
+        captureCoordinator = CaptureCoordinator(transcriptionService: transcriptionService)
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let appIcon = AppAssets.appIcon() {
             NSApplication.shared.applicationIconImage = appIcon
@@ -25,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task { @MainActor in
             await requestPermissions()
+        }
+
+        let transcriptionService = transcriptionService
+        Task.detached(priority: .utility) {
+            await transcriptionService.prewarm()
         }
     }
 
