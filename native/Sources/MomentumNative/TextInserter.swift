@@ -450,7 +450,11 @@ final class TextInserter {
         else {
             return nil
         }
-        return (value as! AXUIElement)
+        let focused = value as! AXUIElement
+        // The messaging timeout is per element; apply the cap here too so
+        // reads on the focused element cannot block on a hung app.
+        AXUIElementSetMessagingTimeout(focused, axMessagingTimeout)
+        return focused
     }
 
     private func characterCount(of element: AXUIElement) -> Int? {
