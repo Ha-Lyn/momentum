@@ -153,28 +153,31 @@ enum ClipboardAction: Equatable, Sendable {
 }
 
 enum TextInsertionDecision {
-    /// True when an attribute readable both before and after differs.
+    /// True when the character count was readable before and after and differs.
     /// Compares "changed", not "increased" (pasting over a selection can shrink text).
-    static func didChange(before: AXTextReading, after: AXTextReading) -> Bool {
-        if let beforeCount = before.characterCount,
-           let afterCount = after.characterCount,
-           beforeCount != afterCount {
-            return true
+    static func countChanged(before: AXTextReading, after: AXTextReading) -> Bool {
+        guard let beforeCount = before.characterCount, let afterCount = after.characterCount else {
+            return false
         }
+        return beforeCount != afterCount
+    }
 
-        if let beforeRange = before.selectedRange,
-           let afterRange = after.selectedRange,
-           beforeRange != afterRange {
-            return true
+    /// True when the selected range was readable before and after and differs.
+    static func rangeChanged(before: AXTextReading, after: AXTextReading) -> Bool {
+        guard let beforeRange = before.selectedRange, let afterRange = after.selectedRange else {
+            return false
         }
-
-        return false
+        return beforeRange != afterRange
     }
 
     /// Classifies one verification poll. Returns `nil` to keep polling.
     /// - `before` unreadable → `.unknown` (verification unavailable).
-    /// - change detected → `.confirmed`.
-    /// - readable, unchanged and `timedOut` → `.failed(.pasteNotDetected)`.
+    /// - character count changed → `.confirmed`. Only a text change counts as
+    ///   proof: confirming restores the previous clipboard and drops the
+    ///   transcript, so a caret/selection move alone is not enough.
+    /// - timed out with only a selection change (e.g. a same-length
+    ///   replacement, or an app that only exposes the range) → `.unknown`.
+    /// - timed out with no change → `.failed(.pasteNotDetected)`.
     static func verificationResult(
         before: AXTextReading,
         after: AXTextReading,
@@ -184,11 +187,15 @@ enum TextInsertionDecision {
             return .unknown
         }
 
-        if didChange(before: before, after: after) {
+        if countChanged(before: before, after: after) {
             return .confirmed
         }
 
-        return timedOut ? .failed(.pasteNotDetected) : nil
+        guard timedOut else {
+            return nil
+        }
+
+        return rangeChanged(before: before, after: after) ? .unknown : .failed(.pasteNotDetected)
     }
 
     /// Clipboard policy after the paste attempt. Only acts if the pasteboard
@@ -230,6 +237,9 @@ final class TextInserter {
     /// When verification is unavailable, give the target time to read the
     /// pasteboard before it is rewritten without the transient marker.
     private let unverifiableSettleDelay: Duration = .milliseconds(200)
+    /// After a confirmed paste, wait before restoring the previous clipboard
+    /// so the target has finished reading the pasteboard.
+    private let confirmedRestoreDelay: Duration = .milliseconds(200)
     /// Cap for synchronous AX calls so an unresponsive app cannot block the UI.
     private let axMessagingTimeout: Float = 0.25
 
@@ -291,6 +301,9 @@ final class TextInserter {
         let result = await verifyPaste(in: appElement, before: before)
 
         // 6. Clipboard policy.
+        if result == .confirmed {
+            try? await Task.sleep(for: confirmedRestoreDelay)
+        }
         applyClipboardPolicy(for: result, text: text, snapshot: snapshot, writtenChangeCount: writtenChangeCount)
         return result
     }

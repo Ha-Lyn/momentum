@@ -5,47 +5,33 @@ import Testing
 struct TextInsertionDecisionTests {
     private static let range = AXTextRange(location: 5, length: 0)
 
-    // MARK: didChange
+    // MARK: countChanged / rangeChanged
 
-    @Test func didChangeIsFalseWhenNothingChanged() {
+    @Test func nothingChangedReportsNoChange() {
         let reading = AXTextReading(characterCount: 10, selectedRange: Self.range)
-        #expect(!TextInsertionDecision.didChange(before: reading, after: reading))
+        #expect(!TextInsertionDecision.countChanged(before: reading, after: reading))
+        #expect(!TextInsertionDecision.rangeChanged(before: reading, after: reading))
     }
 
-    @Test func didChangeDetectsCountChange() {
+    @Test func countChangedDetectsIncreaseAndDecrease() {
         let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
-        let after = AXTextReading(characterCount: 15, selectedRange: Self.range)
-        #expect(TextInsertionDecision.didChange(before: before, after: after))
+        #expect(TextInsertionDecision.countChanged(before: before, after: AXTextReading(characterCount: 15, selectedRange: Self.range)))
+        #expect(TextInsertionDecision.countChanged(before: before, after: AXTextReading(characterCount: 5, selectedRange: Self.range)))
     }
 
-    @Test func didChangeDetectsCountDecrease() {
-        let before = AXTextReading(characterCount: 20, selectedRange: AXTextRange(location: 0, length: 20))
-        let after = AXTextReading(characterCount: 5, selectedRange: AXTextRange(location: 0, length: 20))
-        #expect(TextInsertionDecision.didChange(before: before, after: after))
-    }
-
-    @Test func didChangeDetectsRangeChange() {
-        let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
-        let after = AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 9, length: 0))
-        #expect(TextInsertionDecision.didChange(before: before, after: after))
-    }
-
-    @Test func didChangeDetectsRangeLengthChange() {
+    @Test func rangeChangedDetectsLocationAndLengthChange() {
         let before = AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 5, length: 3))
-        let after = AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 5, length: 0))
-        #expect(TextInsertionDecision.didChange(before: before, after: after))
+        #expect(TextInsertionDecision.rangeChanged(before: before, after: AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 9, length: 3))))
+        #expect(TextInsertionDecision.rangeChanged(before: before, after: AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 5, length: 0))))
     }
 
-    @Test func didChangeIgnoresAttributesUnreadableOnOneSide() {
+    @Test func changesIgnoreAttributesUnreadableOnOneSide() {
         // Count only before, range only after: nothing comparable.
         let before = AXTextReading(characterCount: 10, selectedRange: nil)
         let after = AXTextReading(characterCount: nil, selectedRange: Self.range)
-        #expect(!TextInsertionDecision.didChange(before: before, after: after))
-    }
-
-    @Test func didChangeIsFalseWhenAfterIsUnreadable() {
-        let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
-        #expect(!TextInsertionDecision.didChange(before: before, after: .unreadable))
+        #expect(!TextInsertionDecision.countChanged(before: before, after: after))
+        #expect(!TextInsertionDecision.rangeChanged(before: before, after: after))
+        #expect(!TextInsertionDecision.countChanged(before: before, after: .unreadable))
     }
 
     // MARK: verificationResult
@@ -69,13 +55,13 @@ struct TextInsertionDecisionTests {
         )
     }
 
-    @Test func rangeChangedIsConfirmed() {
+    @Test func rangeOnlyChangeIsNeverConfirmed() {
+        // A caret move without a text change must not restore the clipboard
+        // (that would drop the only copy of the transcript).
         let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
         let after = AXTextReading(characterCount: 10, selectedRange: AXTextRange(location: 20, length: 0))
-        #expect(
-            TextInsertionDecision.verificationResult(before: before, after: after, timedOut: false)
-                == .confirmed
-        )
+        #expect(TextInsertionDecision.verificationResult(before: before, after: after, timedOut: false) == nil)
+        #expect(TextInsertionDecision.verificationResult(before: before, after: after, timedOut: true) == .unknown)
     }
 
     @Test func pasteOverSelectionShrinkingTextIsConfirmed() {
@@ -111,13 +97,11 @@ struct TextInsertionDecisionTests {
         )
     }
 
-    @Test func onlyRangeReadableAndChangedIsConfirmed() {
+    @Test func onlyRangeReadableAndChangedIsUnknownOnTimeout() {
         let before = AXTextReading(characterCount: nil, selectedRange: Self.range)
         let after = AXTextReading(characterCount: nil, selectedRange: AXTextRange(location: 11, length: 0))
-        #expect(
-            TextInsertionDecision.verificationResult(before: before, after: after, timedOut: false)
-                == .confirmed
-        )
+        #expect(TextInsertionDecision.verificationResult(before: before, after: after, timedOut: false) == nil)
+        #expect(TextInsertionDecision.verificationResult(before: before, after: after, timedOut: true) == .unknown)
     }
 
     @Test func onlyCountReadableAndUnchangedFailsOnTimeout() {
