@@ -25,6 +25,9 @@ private actor LocalTranscriptionEngine {
     /// instead of downloading/loading the model twice across actor
     /// reentrancy points.
     private var loadTask: Task<AsrManager, Error>?
+    /// Identifies the attempt stored in `loadTask`, so a waiter finishing
+    /// late only clears the slot if it still holds its own attempt.
+    private var loadAttempt = 0
 
     func prewarm() async throws {
         _ = try await loadManager()
@@ -81,8 +84,10 @@ private actor LocalTranscriptionEngine {
         }
 
         let task: Task<AsrManager, Error>
+        let attempt: Int
         if let loadTask {
             task = loadTask
+            attempt = loadAttempt
         } else {
             task = Task {
                 NSLog("Loading local Parakeet TDT v3 transcription model. The first launch may download model files.")
@@ -92,18 +97,27 @@ private actor LocalTranscriptionEngine {
                 NSLog("Local transcription model loaded.")
                 return manager
             }
+            loadAttempt += 1
+            attempt = loadAttempt
             loadTask = task
         }
 
         do {
             let manager = try await task.value
             asrManager = manager
-            loadTask = nil
+            clearLoadTask(ifAttempt: attempt)
             return manager
         } catch {
-            // Allow a later call to retry the load.
-            loadTask = nil
+            // Allow a later call to retry the load, without discarding a
+            // newer attempt another caller may have started meanwhile.
+            clearLoadTask(ifAttempt: attempt)
             throw TranscriptionError.modelLoadFailed(error)
+        }
+    }
+
+    private func clearLoadTask(ifAttempt attempt: Int) {
+        if attempt == loadAttempt {
+            loadTask = nil
         }
     }
 }
