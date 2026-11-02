@@ -25,10 +25,10 @@ final class PushToTalkMonitor {
 
     /// How long the modifiers must be held before recording starts.
     static let armDelay: Duration = .milliseconds(200)
-    /// While recording with a modifier-only shortcut, the live modifier
-    /// state is re-checked at this interval as a safety net in case a
-    /// flagsChanged event is missed (e.g. secure input), so recording can
-    /// never get stuck.
+    /// While recording, the live modifier state (modifier-only shortcuts) or
+    /// the hotkey's key state (Carbon shortcuts) is re-checked at this
+    /// interval as a safety net in case a release event is missed (e.g.
+    /// secure input), so recording can never get stuck.
     private static let releaseWatchdogInterval: Duration = .milliseconds(100)
 
     private enum State {
@@ -254,7 +254,17 @@ final class PushToTalkMonitor {
     }
 
     private func checkLiveModifiers() {
-        guard state == .recording, let shortcut, shortcut.isModifierOnly else {
+        guard state == .recording, let shortcut else {
+            return
+        }
+
+        if let keyCode = shortcut.keyCode {
+            // Carbon backend: if the released event was missed, the key is
+            // no longer down; stop so the microphone never stays on.
+            if !CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(keyCode)) {
+                pushToTalkLog.info("Push-to-talk hotkey release detected by watchdog")
+                finishRecording()
+            }
             return
         }
 
@@ -274,14 +284,11 @@ final class PushToTalkMonitor {
             return
         }
         state = .recording
+        startReleaseWatchdog()
         onPress?()
     }
 
     private func handleHotKeyReleased() {
-        guard state == .recording else {
-            return
-        }
-        state = .idle
-        onRelease?()
+        finishRecording()
     }
 }

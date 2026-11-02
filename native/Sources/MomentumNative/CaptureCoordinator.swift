@@ -33,9 +33,9 @@ final class CaptureCoordinator {
     private var selectedChannels = AudioChannelSelection.load()
     private var activeChannels: Set<AudioChannel> = []
 
-    /// True between a successful `startCapture()` and the beginning of
-    /// `stopCapture()`. Used to keep note capture and quick transcribe
-    /// mutually exclusive.
+    /// True between a successful `startCapture()` and the moment
+    /// `stopCapture()` has stopped the recorders (before transcription).
+    /// Used to keep note capture and quick transcribe mutually exclusive.
     private(set) var isRecording = false
 
     init(transcriptionService: TranscriptionService) {
@@ -102,7 +102,6 @@ final class CaptureCoordinator {
     }
 
     func stopCapture() async throws -> [CaptureResult] {
-        isRecording = false
         let language = activeCaptureLanguage ?? selectedLanguage
         activeCaptureLanguage = nil
         let channels = activeChannels
@@ -126,6 +125,10 @@ final class CaptureCoordinator {
                 stopErrors.append(error)
             }
         }
+
+        // Only now are the recorders released (the microphone is free), so
+        // quick transcribe stays blocked until this point.
+        isRecording = false
 
         guard !audioURLs.isEmpty else {
             throw stopErrors.last ?? CaptureCoordinatorError.allChannelsFailed
