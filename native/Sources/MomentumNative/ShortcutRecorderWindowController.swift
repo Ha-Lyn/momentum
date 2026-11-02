@@ -254,13 +254,16 @@ final class ShortcutRecorderWindowController: NSWindowController, NSWindowDelega
         let modifiers = PushToTalkShortcut.ModifierSet(eventFlags: event.modifierFlags)
         let keyCode = UInt32(event.keyCode)
 
+        // Esc always cancels, even with modifiers still held (users often
+        // press it mid-chord); it must never become a global hotkey.
+        if keyCode == UInt32(kVK_Escape) {
+            cancelRecording()
+            return
+        }
+
         guard !modifiers.isEmpty else {
-            if keyCode == UInt32(kVK_Escape) {
-                cancelRecording()
-            } else {
-                shortcutLabel.stringValue = "…"
-                showStatus(Self.missingModifierHint, isError: true)
-            }
+            shortcutLabel.stringValue = "…"
+            showStatus(Self.missingModifierHint, isError: true)
             return
         }
 
