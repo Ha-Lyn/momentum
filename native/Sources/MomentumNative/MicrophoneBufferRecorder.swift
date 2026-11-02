@@ -156,18 +156,23 @@ final class MicrophoneBufferRecorder {
             return
         }
 
-        // The input device changed (e.g. headset plugged/unplugged). The
-        // engine has already stopped and the tap's format is stale; stop
-        // cleanly and keep the samples captured so far for stop().
+        // The input device changed (e.g. headset plugged/unplugged) and the
+        // engine has already stopped. Do not touch the tap: the node may be
+        // detached, and AVAudioNode.removeTap raises an uncatchable
+        // Objective-C exception in that state. Just stop and drop the engine
+        // (releasing it releases the tap) and keep the samples captured so
+        // far for stop(). With `engine == nil`, teardown() skips removeTap.
         quickTranscribeLog.warning("Audio configuration changed while recording; stopping microphone and keeping captured audio")
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
         removeConfigurationObserver()
+        engine.stop()
+        self.engine = nil
     }
 
     private func teardown() {
         removeConfigurationObserver()
 
+        // Only a still-attached session engine has a tap to remove (a
+        // configuration change drops the engine without removing it).
         if let engine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
