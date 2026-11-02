@@ -143,7 +143,7 @@ final class PushToTalkMonitor {
             monitors.append(local)
         }
 
-        lastModifiers = PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.modifierFlags)
+        lastModifiers = Self.hardwareModifiers()
     }
 
     private func handle(_ event: NSEvent) {
@@ -231,7 +231,7 @@ final class PushToTalkMonitor {
         }
 
         // Re-check the live modifier state in case an event was missed.
-        guard PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.modifierFlags) == shortcut.modifiers else {
+        guard Self.hardwareModifiers() == shortcut.modifiers else {
             state = .idle
             return
         }
@@ -276,19 +276,27 @@ final class PushToTalkMonitor {
         if let keyCode = shortcut.keyCode {
             // Carbon backend: if the released event was missed, the key is
             // no longer down; stop so the microphone never stays on.
-            if !CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(keyCode)) {
+            if !CGEventSource.keyState(.hidSystemState, key: CGKeyCode(keyCode)) {
                 pushToTalkLog.info("Push-to-talk hotkey release detected by watchdog")
                 finishRecording()
             }
             return
         }
 
-        let live = PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.modifierFlags)
+        // Read the hardware modifier state, not NSEvent.modifierFlags: the
+        // latter reflects the last event this process saw, which goes stale
+        // when monitors stop receiving events (e.g. secure input).
+        let live = Self.hardwareModifiers()
         if live != shortcut.modifiers {
             pushToTalkLog.info("Push-to-talk release detected by watchdog")
             lastModifiers = live
             finishRecording()
         }
+    }
+
+    private static func hardwareModifiers() -> PushToTalkShortcut.ModifierSet {
+        let flags = CGEventSource.flagsState(.hidSystemState)
+        return PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.ModifierFlags(rawValue: UInt(flags.rawValue)))
     }
 
     // MARK: Carbon backend
