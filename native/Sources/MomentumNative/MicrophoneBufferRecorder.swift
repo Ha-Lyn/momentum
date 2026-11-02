@@ -51,6 +51,14 @@ final class MicrophoneBufferRecorder {
         accumulator != nil
     }
 
+    #if DEBUG
+    /// Test hook: the engine of the active session (nil once a configuration
+    /// change has dropped it).
+    var activeEngineForTesting: AVAudioEngine? {
+        engine
+    }
+    #endif
+
     func start() throws {
         guard accumulator == nil else {
             throw MicrophoneBufferRecorderError.alreadyRecording
