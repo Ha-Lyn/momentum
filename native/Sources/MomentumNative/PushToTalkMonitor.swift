@@ -4,6 +4,17 @@ import os
 
 private let pushToTalkLog = Logger(subsystem: "com.momentum.native", category: "quick-transcribe")
 
+enum PushToTalkMonitorError: LocalizedError {
+    case globalMonitorUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .globalMonitorUnavailable:
+            return "The global keyboard monitor could not be installed. Check Accessibility access for Momentum in System Settings."
+        }
+    }
+}
+
 /// Detects press-and-hold of the push-to-talk shortcut and reports
 /// `onPress` (start recording), `onRelease` (stop and transcribe) and
 /// `onCancel` (discard).
@@ -74,7 +85,7 @@ final class PushToTalkMonitor {
             )
             pushToTalkLog.info("Push-to-talk hotkey registered: \(shortcut.displayString, privacy: .public)")
         } else {
-            installEventMonitors()
+            try installEventMonitors()
             pushToTalkLog.info("Push-to-talk modifier monitor started: \(shortcut.displayString, privacy: .public)")
         }
 
@@ -106,7 +117,10 @@ final class PushToTalkMonitor {
 
     // MARK: Modifier-only backend
 
-    private func installEventMonitors() {
+    /// Throws if the global monitor cannot be installed: without it the
+    /// shortcut never fires in other apps, so the feature must be reported
+    /// as unavailable rather than silently inert.
+    private func installEventMonitors() throws {
         if !AccessibilityPermission.isTrusted {
             pushToTalkLog.warning("Accessibility is not granted; the global push-to-talk monitor will not receive events from other apps")
         }
@@ -116,7 +130,8 @@ final class PushToTalkMonitor {
         }) {
             monitors.append(global)
         } else {
-            pushToTalkLog.warning("Failed to install the global push-to-talk event monitor")
+            pushToTalkLog.error("Failed to install the global push-to-talk event monitor")
+            throw PushToTalkMonitorError.globalMonitorUnavailable
         }
 
         // Local monitor: events while Momentum itself is frontmost. The
