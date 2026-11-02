@@ -74,7 +74,20 @@ struct PushToTalkShortcutTests {
     ])
     func singleModifierIsValid(modifier: PushToTalkShortcut.ModifierSet) {
         #expect(PushToTalkShortcut(modifiers: modifier, keyCode: nil).validate() == nil)
-        #expect(PushToTalkShortcut(modifiers: modifier, keyCode: Self.space).validate() == nil)
+        let expectedWithKey: PushToTalkShortcut.ValidationError? = modifier == .command ? .conflictsWithSystemShortcut : nil
+        #expect(PushToTalkShortcut(modifiers: modifier, keyCode: Self.space).validate() == expectedWithKey)
+    }
+
+    @Test(arguments: [kVK_ANSI_V, kVK_ANSI_C, kVK_ANSI_Q])
+    func commandOnlyWithKeyIsRejected(keyCode: Int) {
+        #expect(
+            PushToTalkShortcut(modifiers: [.command], keyCode: UInt32(keyCode)).validate()
+                == .conflictsWithSystemShortcut
+        )
+    }
+
+    @Test func commandWithAnotherModifierAndVIsValid() {
+        #expect(PushToTalkShortcut(modifiers: [.command, .option], keyCode: UInt32(kVK_ANSI_V)).validate() == nil)
     }
 
     // MARK: Persistence

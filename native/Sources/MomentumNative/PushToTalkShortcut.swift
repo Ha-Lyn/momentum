@@ -74,6 +74,7 @@ struct PushToTalkShortcut: Equatable, Codable, Sendable {
     enum ValidationError: LocalizedError, Equatable, Sendable {
         case noModifiers
         case conflictsWithNoteToggle
+        case conflictsWithSystemShortcut
 
         var errorDescription: String? {
             switch self {
@@ -81,6 +82,8 @@ struct PushToTalkShortcut: Equatable, Codable, Sendable {
                 return "The shortcut must include at least one modifier key (⌃, ⌥, ⇧ or ⌘)."
             case .conflictsWithNoteToggle:
                 return "This shortcut conflicts with the note recording shortcut (\(PushToTalkShortcut.noteToggle.displayString))."
+            case .conflictsWithSystemShortcut:
+                return "⌘ + key shortcuts are reserved by apps (for example ⌘V, which Quick Transcribe uses to paste). Add another modifier."
             }
         }
     }
@@ -112,8 +115,15 @@ struct PushToTalkShortcut: Equatable, Codable, Sendable {
     }
 
     func validate() -> ValidationError? {
-        if modifiers.intersection(.all).isEmpty {
+        if modifiers.isDisjoint(with: .all) {
             return .noModifiers
+        }
+
+        // A ⌘-only hotkey is a standard app shortcut (⌘C, ⌘Q, ...). The Carbon
+        // hotkey would swallow it system-wide, and ⌘V would even intercept the
+        // synthesized paste.
+        if keyCode != nil, modifiers == .command {
+            return .conflictsWithSystemShortcut
         }
 
         let toggle = Self.noteToggle
