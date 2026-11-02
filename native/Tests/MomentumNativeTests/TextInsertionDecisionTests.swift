@@ -40,14 +40,14 @@ struct TextInsertionDecisionTests {
         _ before: AXTextReading,
         _ after: AXTextReading,
         inserted: Int = 15,
-        focusChanged: Bool = false,
+        focus: FocusObservation = .same,
         timedOut: Bool
     ) -> InsertResult? {
         TextInsertionDecision.verificationResult(
             before: before,
             after: after,
             insertedLength: inserted,
-            focusChanged: focusChanged,
+            focus: focus,
             timedOut: timedOut
         )
     }
@@ -84,7 +84,26 @@ struct TextInsertionDecisionTests {
     func focusChangeIsUnknownEvenWithMatchingDelta(timedOut: Bool) {
         let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
         let after = AXTextReading(characterCount: 25, selectedRange: Self.range)
-        #expect(Self.verify(before, after, inserted: 15, focusChanged: true, timedOut: timedOut) == .unknown)
+        #expect(Self.verify(before, after, inserted: 15, focus: .changed, timedOut: timedOut) == .unknown)
+    }
+
+    @Test func unreadableFocusKeepsPollingAndCanStillConfirm() {
+        // A nil focus read (target busy with ⌘V, AX timeout) is not a focus change.
+        let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
+        #expect(Self.verify(before, before, focus: .unreadable, timedOut: false) == nil)
+        let after = AXTextReading(characterCount: 25, selectedRange: AXTextRange(location: 20, length: 0))
+        #expect(Self.verify(before, after, inserted: 15, focus: .unreadable, timedOut: false) == .confirmed)
+    }
+
+    @Test func unreadableFocusAtDeadlineIsUnknown() {
+        let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
+        #expect(Self.verify(before, before, focus: .unreadable, timedOut: true) == .unknown)
+    }
+
+    @Test func focusObservationMapsNilToUnreadable() {
+        #expect(FocusObservation.from(currentFocusMatches: nil) == .unreadable)
+        #expect(FocusObservation.from(currentFocusMatches: true) == .same)
+        #expect(FocusObservation.from(currentFocusMatches: false) == .changed)
     }
 
     @Test func rangeOnlyChangeIsNeverConfirmed() {
@@ -119,10 +138,12 @@ struct TextInsertionDecisionTests {
         #expect(Self.verify(before, after, timedOut: true) == .unknown)
     }
 
-    @Test func onlyCountReadableAndUnchangedFailsOnTimeout() {
+    @Test func onlyCountReadableAndUnchangedIsUnknownOnTimeout() {
+        // Without a selected range a same-length replacement looks like no
+        // paste at all, so it cannot be reported as a failure.
         let reading = AXTextReading(characterCount: 3, selectedRange: nil)
         #expect(Self.verify(reading, reading, timedOut: false) == nil)
-        #expect(Self.verify(reading, reading, timedOut: true) == .failed(.pasteNotDetected))
+        #expect(Self.verify(reading, reading, timedOut: true) == .unknown)
     }
 
     @Test func onlyRangeReadableAndUnchangedFailsOnTimeout() {

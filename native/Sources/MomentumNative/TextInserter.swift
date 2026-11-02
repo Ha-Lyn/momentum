@@ -142,6 +142,25 @@ struct AXTextReading: Equatable, Sendable {
     }
 }
 
+/// Whether the element focused before ⌘V is still focused on a poll.
+enum FocusObservation: Equatable, Sendable {
+    case same
+    case changed
+    /// The focused element could not be read on this poll (target busy
+    /// handling ⌘V, or the AX messaging timeout fired).
+    case unreadable
+
+    /// Maps one `kAXFocusedUIElementAttribute` read: `nil` is unreadable,
+    /// never "changed".
+    static func from(currentFocusMatches: Bool?) -> FocusObservation {
+        switch currentFocusMatches {
+        case .some(true): return .same
+        case .some(false): return .changed
+        case .none: return .unreadable
+        }
+    }
+}
+
 /// What to do with the clipboard once the insert finished.
 enum ClipboardAction: Equatable, Sendable {
     /// Put the user's previous clipboard back.
@@ -181,36 +200,40 @@ enum TextInsertionDecision {
     /// Classifies one verification poll. Returns `nil` to keep polling.
     ///
     /// Confirming restores the previous clipboard and drops the transcript,
-    /// so it requires strong evidence: the element focused before ⌘V is
-    /// still focused and its character count changed by exactly the pasted
-    /// length (minus the replaced selection). Anything weaker keeps the
-    /// transcript on the clipboard.
+    /// so it requires strong evidence: focus has not moved to another
+    /// element and the snapshotted element's character count changed by
+    /// exactly the pasted length (minus the replaced selection). Anything
+    /// weaker keeps the transcript on the clipboard.
     /// - `before` unreadable → `.unknown` (verification unavailable).
     /// - focus moved to another element → `.unknown`.
-    /// - count delta matches the paste → `.confirmed`.
-    /// - timed out with some other change (different delta, selection move,
-    ///   app-transformed text) → `.unknown`.
-    /// - timed out with no change → `.failed(.pasteNotDetected)`.
+    /// - count delta matches the paste → `.confirmed` (also when the focus
+    ///   read failed on this poll: the element itself was read).
+    /// - otherwise keep polling until `timedOut`, then:
+    ///   - some other change (different delta, selection move) → `.unknown`;
+    ///   - focus unreadable at the deadline → `.unknown`;
+    ///   - no selected range was readable (a same-length replacement is
+    ///     indistinguishable from no paste) → `.unknown`;
+    ///   - nothing changed → `.failed(.pasteNotDetected)`.
     /// - `insertedLength` is in UTF-16 units, like AX counts and ranges.
     static func verificationResult(
         before: AXTextReading,
         after: AXTextReading,
         insertedLength: Int,
-        focusChanged: Bool,
+        focus: FocusObservation,
         timedOut: Bool
     ) -> InsertResult? {
         guard before.isReadable else {
             return .unknown
         }
 
-        if focusChanged {
+        if focus == .changed {
             return .unknown
         }
 
         if let beforeCount = before.characterCount,
            let afterCount = after.characterCount,
-           afterCount - beforeCount == expectedCountDelta(insertedLength: insertedLength, before: before),
-           afterCount != beforeCount {
+           afterCount != beforeCount,
+           afterCount - beforeCount == expectedCountDelta(insertedLength: insertedLength, before: before) {
             return .confirmed
         }
 
@@ -218,7 +241,10 @@ enum TextInsertionDecision {
             return nil
         }
 
-        if countChanged(before: before, after: after) || rangeChanged(before: before, after: after) {
+        if focus == .unreadable
+            || before.selectedRange == nil
+            || countChanged(before: before, after: after)
+            || rangeChanged(before: before, after: after) {
             return .unknown
         }
         return .failed(.pasteNotDetected)
@@ -394,14 +420,14 @@ final class TextInserter {
             // Always read the element snapshotted before ⌘V; a change in
             // another field must never count as this paste.
             let currentFocus = focusedElement(in: appElement)
-            let focusChanged = currentFocus.map { !CFEqual($0, element) } ?? true
+            let focus = FocusObservation.from(currentFocusMatches: currentFocus.map { CFEqual($0, element) })
             let after = readText(of: element)
 
             if let result = TextInsertionDecision.verificationResult(
                 before: before,
                 after: after,
                 insertedLength: insertedLength,
-                focusChanged: focusChanged,
+                focus: focus,
                 timedOut: timedOut
             ) {
                 return result
