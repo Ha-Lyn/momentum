@@ -1,13 +1,32 @@
 import AppKit
 
+/// Floating status pill at the bottom of the screen. Borderless, ignores
+/// mouse events and is only ordered front with `orderFrontRegardless`, so it
+/// never becomes key and never activates Momentum (focus stays in the app
+/// the user is typing in).
 @MainActor
 final class FloatingPillWindowController {
+    private static let minimumWidth: CGFloat = 240
+    private static let maximumWidth: CGFloat = 640
+    private static let height: CGFloat = 70
+    private static let horizontalPadding: CGFloat = 28
+
     private let window: NSWindow
-    private let pillView = PillView(frame: NSRect(x: 0, y: 0, width: 240, height: 70))
+    private let pillView = PillView(frame: NSRect(x: 0, y: 0, width: minimumWidth, height: height))
+
+    /// Bumped on every state change. Pending fade-out completions and
+    /// message timers only act if the generation is still theirs, so an
+    /// earlier hide() can never hide a newly shown state.
+    private var generation: UInt64 = 0
+    private var messageTask: Task<Void, Never>?
+    /// True while a note recording is in progress. Transient states
+    /// (messages, hide()) fall back to the listening indicator instead of
+    /// hiding the pill.
+    private var isRecordingIndicatorActive = false
 
     init() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 240, height: 70),
+            contentRect: NSRect(x: 0, y: 0, width: Self.minimumWidth, height: Self.height),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -24,34 +43,100 @@ final class FloatingPillWindowController {
         window.alphaValue = 0
     }
 
-    func showRecordingIndicator() {
-        positionWindow()
-        pillView.startAnimating()
-        window.orderFrontRegardless()
+    // MARK: Note recording
 
-        window.animator().alphaValue = 1
+    func showRecordingIndicator() {
+        isRecordingIndicatorActive = true
+        showListening()
     }
 
     func hideRecordingIndicator() {
+        isRecordingIndicatorActive = false
+        hide()
+    }
+
+    // MARK: States
+
+    func showListening() {
+        present(.listening)
+    }
+
+    func showTranscribing() {
+        present(.transcribing)
+    }
+
+    /// Shows `text` and hides the pill automatically after `duration`
+    /// (or returns to the note recording indicator if one is active).
+    func showMessage(_ text: String, duration: TimeInterval = 2.0) {
+        present(.message(text))
+
+        let messageGeneration = generation
+        messageTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled, let self, self.generation == messageGeneration else {
+                return
+            }
+            self.hide()
+        }
+    }
+
+    func hide() {
+        if isRecordingIndicatorActive {
+            present(.listening)
+            return
+        }
+
+        let hideGeneration = advanceGeneration()
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.25
             window.animator().alphaValue = 0
         } completionHandler: {
             Task { @MainActor in
+                guard self.generation == hideGeneration else {
+                    return
+                }
                 self.pillView.stopAnimating()
                 self.window.orderOut(nil)
             }
         }
     }
 
-    private func positionWindow() {
+    // MARK: Private
+
+    @discardableResult
+    private func advanceGeneration() -> UInt64 {
+        generation &+= 1
+        messageTask?.cancel()
+        messageTask = nil
+        return generation
+    }
+
+    private func present(_ content: PillView.Content) {
+        advanceGeneration()
+
+        pillView.configure(content)
+        positionWindow(width: preferredWidth())
+        window.orderFrontRegardless()
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            window.animator().alphaValue = 1
+        }
+    }
+
+    private func preferredWidth() -> CGFloat {
+        let contentWidth = pillView.contentFittingWidth() + Self.horizontalPadding * 2
+        return min(max(Self.minimumWidth, ceil(contentWidth)), Self.maximumWidth)
+    }
+
+    private func positionWindow(width: CGFloat) {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else {
             return
         }
 
         let frame = screen.visibleFrame
-        let width: CGFloat = 240
-        let height: CGFloat = 70
+        let height = Self.height
         let x = frame.midX - (width / 2)
         let y = frame.minY + 40
         window.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
@@ -59,9 +144,21 @@ final class FloatingPillWindowController {
 }
 
 private final class PillView: NSView {
+    enum Content: Equatable {
+        case listening
+        case transcribing
+        case message(String)
+    }
+
+    /// Longest text width before the label truncates.
+    private static let maximumTextWidth: CGFloat = 540
+
     private let materialView = NSVisualEffectView()
+    private let contentStack = NSStackView()
     private let indicatorView = NSView()
+    private let spinner = NSProgressIndicator()
     private let textField = NSTextField(labelWithString: "Listening...")
+    private let wavesStack = NSStackView()
     private var barViews: [NSView] = []
 
     override init(frame frameRect: NSRect) {
@@ -73,9 +170,39 @@ private final class PillView: NSView {
         nil
     }
 
+    func configure(_ content: Content) {
+        switch content {
+        case .listening:
+            textField.stringValue = "Listening..."
+            indicatorView.isHidden = false
+            wavesStack.isHidden = false
+            setSpinnerVisible(false)
+            startAnimating()
+        case .transcribing:
+            textField.stringValue = "Transcribing..."
+            stopAnimating()
+            indicatorView.isHidden = true
+            wavesStack.isHidden = true
+            setSpinnerVisible(true)
+        case .message(let text):
+            textField.stringValue = text
+            stopAnimating()
+            indicatorView.isHidden = true
+            wavesStack.isHidden = true
+            setSpinnerVisible(false)
+        }
+    }
+
+    /// Width the content needs for the current state.
+    func contentFittingWidth() -> CGFloat {
+        layoutSubtreeIfNeeded()
+        return contentStack.fittingSize.width
+    }
+
     func startAnimating() {
         wantsLayer = true
         alphaValue = 1
+        stopAnimating()
 
         for (index, bar) in barViews.enumerated() {
             let animation = CABasicAnimation(keyPath: "bounds.size.height")
@@ -102,6 +229,16 @@ private final class PillView: NSView {
     func stopAnimating() {
         barViews.forEach { $0.layer?.removeAllAnimations() }
         indicatorView.layer?.removeAllAnimations()
+        setSpinnerVisible(false)
+    }
+
+    private func setSpinnerVisible(_ visible: Bool) {
+        spinner.isHidden = !visible
+        if visible {
+            spinner.startAnimation(nil)
+        } else {
+            spinner.stopAnimation(nil)
+        }
     }
 
     private func setupUI() {
@@ -119,7 +256,6 @@ private final class PillView: NSView {
         materialView.autoresizingMask = [.width, .height]
         addSubview(materialView)
 
-        let contentStack = NSStackView()
         contentStack.orientation = .horizontal
         contentStack.alignment = .centerY
         contentStack.spacing = 12
@@ -139,10 +275,27 @@ private final class PillView: NSView {
             indicatorView.heightAnchor.constraint(equalToConstant: 10),
         ])
 
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isIndeterminate = true
+        spinner.isDisplayedWhenStopped = false
+        spinner.appearance = NSAppearance(named: .darkAqua)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.isHidden = true
+        NSLayoutConstraint.activate([
+            spinner.widthAnchor.constraint(equalToConstant: 16),
+            spinner.heightAnchor.constraint(equalToConstant: 16),
+        ])
+
         textField.font = NSFont.systemFont(ofSize: 15, weight: .medium)
         textField.textColor = NSColor(calibratedWhite: 0.94, alpha: 1)
+        textField.lineBreakMode = .byTruncatingTail
+        textField.maximumNumberOfLines = 1
+        textField.cell?.usesSingleLineMode = true
+        textField.cell?.truncatesLastVisibleLine = true
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maximumTextWidth).isActive = true
 
-        let wavesStack = NSStackView()
         wavesStack.orientation = .horizontal
         wavesStack.alignment = .centerY
         wavesStack.spacing = 3
@@ -162,6 +315,7 @@ private final class PillView: NSView {
         }
 
         contentStack.addArrangedSubview(indicatorView)
+        contentStack.addArrangedSubview(spinner)
         contentStack.addArrangedSubview(textField)
         contentStack.addArrangedSubview(wavesStack)
 

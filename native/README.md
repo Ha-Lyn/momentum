@@ -9,6 +9,7 @@ Native macOS implementation of Momentum. The project-level guide is in
 - Swift 6
 - Internet access for the first local model download
 - Microphone and System Audio Recording permissions
+- Accessibility permission for Quick Transcribe
 
 ## Run in development
 
@@ -49,6 +50,22 @@ first transcription. Audio inference runs locally after the model is cached.
 Input and Output are captured into separate files. Their names begin with
 `input-` and `output-`, respectively, and each file receives its own Markdown
 transcription.
+
+## Quick Transcribe
+
+Hold `Option + Shift` (customizable from the menu's **Quick Transcribe
+Shortcut…** item), speak and release: the microphone audio is transcribed in
+memory and pasted into the focused app. Nothing is written to disk. The
+previous clipboard is restored when the paste is confirmed through
+Accessibility; otherwise the transcript stays on the clipboard for a manual
+`Command + V`. It is blocked while a note recording is in progress.
+
+The global shortcut and the synthesized paste require Accessibility
+permission (System Settings > Privacy & Security > Accessibility), requested
+from the menu's **Grant Accessibility Access…** item or when the feature is
+turned on. With `swift run` the permission is granted to the terminal app
+that launched the binary, not to Momentum, so test Quick Transcribe with the
+signed bundle from `./scripts/build-app.sh`.
 
 ## Publish a release
 

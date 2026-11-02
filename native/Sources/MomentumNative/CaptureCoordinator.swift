@@ -27,11 +27,20 @@ enum CaptureCoordinatorError: LocalizedError {
 final class CaptureCoordinator {
     private let audioRecorder = AudioRecorder()
     private let outputAudioRecorder = OutputAudioRecorder()
-    private let transcriptionService = TranscriptionService()
+    private let transcriptionService: TranscriptionService
     private var selectedLanguage = TranscriptionLanguage.load()
     private var activeCaptureLanguage: TranscriptionLanguage?
     private var selectedChannels = AudioChannelSelection.load()
     private var activeChannels: Set<AudioChannel> = []
+
+    /// True between a successful `startCapture()` and the moment
+    /// `stopCapture()` has stopped the recorders (before transcription).
+    /// Used to keep note capture and quick transcribe mutually exclusive.
+    private(set) var isRecording = false
+
+    init(transcriptionService: TranscriptionService) {
+        self.transcriptionService = transcriptionService
+    }
 
     func requestMicrophoneAccess() async throws {
         try await audioRecorder.requestMicrophoneAccess()
@@ -89,6 +98,7 @@ final class CaptureCoordinator {
 
         activeChannels = selectedChannels
         activeCaptureLanguage = selectedLanguage
+        isRecording = true
     }
 
     func stopCapture() async throws -> [CaptureResult] {
@@ -115,6 +125,10 @@ final class CaptureCoordinator {
                 stopErrors.append(error)
             }
         }
+
+        // Only now are the recorders released (the microphone is free), so
+        // quick transcribe stays blocked until this point.
+        isRecording = false
 
         guard !audioURLs.isEmpty else {
             throw stopErrors.last ?? CaptureCoordinatorError.allChannelsFailed

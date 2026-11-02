@@ -1,5 +1,8 @@
 import FluidAudio
 import Foundation
+import os
+
+private let transcriptionLog = Logger(subsystem: "com.momentum.native", category: "transcription")
 
 enum TranscriptionError: LocalizedError {
     case modelLoadFailed(Error)
@@ -17,21 +20,62 @@ enum TranscriptionError: LocalizedError {
 
 private actor LocalTranscriptionEngine {
     private var asrManager: AsrManager?
+    /// In-flight model load. Shared so that concurrent callers (e.g. the
+    /// launch prewarm racing a first transcription) await the same load
+    /// instead of downloading/loading the model twice across actor
+    /// reentrancy points.
+    private var loadTask: Task<AsrManager, Error>?
+    /// Identifies the attempt stored in `loadTask`, so a waiter finishing
+    /// late only clears the slot if it still holds its own attempt.
+    private var loadAttempt = 0
+
+    func prewarm() async throws {
+        _ = try await loadManager()
+    }
+
+    /// Tail of the transcription queue. `AsrManager` keeps internal state
+    /// across suspension points, and actor reentrancy would otherwise let a
+    /// quick transcription interleave with a long note transcription, so
+    /// transcriptions run strictly one after another.
+    private var queueTail: Task<Void, Never>?
 
     func transcribe(audioURL: URL, language: TranscriptionLanguage) async throws -> String {
-        let manager = try await loadManager()
-
-        do {
+        try await serialized { manager in
             var decoderState = try TdtDecoderState()
-            let result = try await manager.transcribe(
+            return try await manager.transcribe(
                 audioURL,
                 decoderState: &decoderState,
                 language: language.fluidAudioValue
-            )
-            return result.text
-        } catch {
-            throw TranscriptionError.inferenceFailed(error)
+            ).text
         }
+    }
+
+    func transcribe(samples: [Float], language: TranscriptionLanguage) async throws -> String {
+        try await serialized { manager in
+            var decoderState = try TdtDecoderState()
+            return try await manager.transcribe(
+                samples,
+                decoderState: &decoderState,
+                language: language.fluidAudioValue
+            ).text
+        }
+    }
+
+    private func serialized(
+        _ work: @escaping @Sendable (AsrManager) async throws -> String
+    ) async throws -> String {
+        let previous = queueTail
+        let task = Task { () async throws -> String in
+            await previous?.value
+            let manager = try await self.loadManager()
+            do {
+                return try await work(manager)
+            } catch {
+                throw TranscriptionError.inferenceFailed(error)
+            }
+        }
+        queueTail = Task { _ = try? await task.value }
+        return try await task.value
     }
 
     private func loadManager() async throws -> AsrManager {
@@ -39,21 +83,47 @@ private actor LocalTranscriptionEngine {
             return asrManager
         }
 
-        NSLog("Loading local Parakeet TDT v3 transcription model. The first launch may download model files.")
+        let task: Task<AsrManager, Error>
+        let attempt: Int
+        if let loadTask {
+            task = loadTask
+            attempt = loadAttempt
+        } else {
+            task = Task {
+                NSLog("Loading local Parakeet TDT v3 transcription model. The first launch may download model files.")
+                let models = try await AsrModels.downloadAndLoad(version: .v3)
+                let manager = AsrManager(config: .default)
+                try await manager.loadModels(models)
+                NSLog("Local transcription model loaded.")
+                return manager
+            }
+            loadAttempt += 1
+            attempt = loadAttempt
+            loadTask = task
+        }
 
         do {
-            let models = try await AsrModels.downloadAndLoad(version: .v3)
-            let manager = AsrManager(config: .default)
-            try await manager.loadModels(models)
+            let manager = try await task.value
             asrManager = manager
-            NSLog("Local transcription model loaded.")
+            clearLoadTask(ifAttempt: attempt)
             return manager
         } catch {
+            // Allow a later call to retry the load, without discarding a
+            // newer attempt another caller may have started meanwhile.
+            clearLoadTask(ifAttempt: attempt)
             throw TranscriptionError.modelLoadFailed(error)
+        }
+    }
+
+    private func clearLoadTask(ifAttempt attempt: Int) {
+        if attempt == loadAttempt {
+            loadTask = nil
         }
     }
 }
 
+/// Shared local transcription service. Create a single instance and inject it
+/// everywhere so the Parakeet model is only loaded once.
 struct TranscriptionService: Sendable {
     private let engine: LocalTranscriptionEngine
 
@@ -61,8 +131,25 @@ struct TranscriptionService: Sendable {
         engine = LocalTranscriptionEngine()
     }
 
+    /// Loads the transcription model ahead of time so the first transcription
+    /// is fast. Never throws; failures are logged and the load is retried on
+    /// the next transcription.
+    func prewarm() async {
+        do {
+            try await engine.prewarm()
+        } catch {
+            transcriptionLog.error("Transcription model prewarm failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func transcribe(audioURL: URL, language: TranscriptionLanguage) async throws -> String {
         try await engine.transcribe(audioURL: audioURL, language: language)
+    }
+
+    /// Transcribes in-memory 16 kHz mono Float32 samples. FluidAudio rejects
+    /// audio shorter than `ASRConstants.minimumAudioDurationSeconds` (0.3 s).
+    func transcribe(samples: [Float], language: TranscriptionLanguage) async throws -> String {
+        try await engine.transcribe(samples: samples, language: language)
     }
 }
 
