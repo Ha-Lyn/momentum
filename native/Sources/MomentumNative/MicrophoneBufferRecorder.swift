@@ -6,6 +6,7 @@ private let quickTranscribeLog = Logger(subsystem: "com.momentum.native", catego
 
 enum MicrophoneBufferRecorderError: LocalizedError {
     case microphoneAccessDenied
+    case microphoneAccessPending
     case alreadyRecording
     case noInputDevice
     case converterUnavailable
@@ -15,6 +16,8 @@ enum MicrophoneBufferRecorderError: LocalizedError {
         switch self {
         case .microphoneAccessDenied:
             return "Microphone access was denied. Enable Momentum under System Settings > Privacy & Security > Microphone."
+        case .microphoneAccessPending:
+            return "Allow microphone access in the system prompt, then try again."
         case .alreadyRecording:
             return "A quick transcription is already recording."
         case .noInputDevice:
@@ -53,7 +56,15 @@ final class MicrophoneBufferRecorder {
             throw MicrophoneBufferRecorderError.alreadyRecording
         }
 
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            break
+        case .notDetermined:
+            // The prompt has not been answered yet (or never shown): ask now
+            // instead of reporting a denial. The user retries once granted.
+            Self.requestMicrophoneAccess()
+            throw MicrophoneBufferRecorderError.microphoneAccessPending
+        default:
             throw MicrophoneBufferRecorderError.microphoneAccessDenied
         }
 
@@ -171,6 +182,15 @@ final class MicrophoneBufferRecorder {
             NotificationCenter.default.removeObserver(configurationObserver)
         }
         configurationObserver = nil
+    }
+
+    /// Triggers the microphone prompt. Nonisolated so the completion handler
+    /// (called on an arbitrary queue) is not main-actor isolated, which
+    /// Swift 6 would trap on.
+    private nonisolated static func requestMicrophoneAccess() {
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            quickTranscribeLog.info("Microphone access request finished: granted=\(granted, privacy: .public)")
+        }
     }
 
     /// Builds the tap block in a nonisolated context. A closure literal
