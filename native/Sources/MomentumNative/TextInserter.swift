@@ -210,7 +210,9 @@ enum TextInsertionDecision {
     ///   read failed on this poll: the element itself was read).
     /// - otherwise keep polling until `timedOut`, then:
     ///   - some other change (different delta, selection move) → `.unknown`;
-    ///   - focus unreadable at the deadline → `.unknown`;
+    ///   - focus or the element unreadable at the deadline → `.unknown` (the
+    ///     app may have pasted and stopped exposing AX; "press ⌘V" could
+    ///     insert the text twice);
     ///   - no selected range was readable (a same-length replacement is
     ///     indistinguishable from no paste) → `.unknown`;
     ///   - nothing changed → `.failed(.pasteNotDetected)`.
@@ -242,6 +244,7 @@ enum TextInsertionDecision {
         }
 
         if focus == .unreadable
+            || !after.isReadable
             || before.selectedRange == nil
             || countChanged(before: before, after: after)
             || rangeChanged(before: before, after: after) {

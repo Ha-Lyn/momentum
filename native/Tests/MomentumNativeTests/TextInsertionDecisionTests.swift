@@ -152,10 +152,12 @@ struct TextInsertionDecisionTests {
         #expect(Self.verify(reading, reading, timedOut: true) == .failed(.pasteNotDetected))
     }
 
-    @Test func readableBeforeButUnreadableAfterFailsOnTimeout() {
+    @Test func readableBeforeButUnreadableAfterIsUnknownOnTimeout() {
+        // The element stopped exposing AX (or every read timed out): the paste
+        // may have happened, so it must not be reported as a failure.
         let before = AXTextReading(characterCount: 10, selectedRange: Self.range)
         #expect(Self.verify(before, .unreadable, timedOut: false) == nil)
-        #expect(Self.verify(before, .unreadable, timedOut: true) == .failed(.pasteNotDetected))
+        #expect(Self.verify(before, .unreadable, timedOut: true) == .unknown)
     }
 
     @Test func expectedDeltaSubtractsSelection() {
