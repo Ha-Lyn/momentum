@@ -347,6 +347,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 try registerNoteToggleHotKey()
             } catch {
                 appLog.error("Failed to re-register the note recording hotkey: \(error.localizedDescription, privacy: .public)")
+                presentErrorAlert(message: error.localizedDescription)
             }
         }
     }
