@@ -53,6 +53,10 @@ final class PushToTalkMonitor {
     ]
 
     private let hotKeyManager: HotKeyManager
+    /// Live modifier state; hardware state by default, injectable for tests.
+    private let modifierSource: @MainActor () -> PushToTalkShortcut.ModifierSet
+    /// Whether a key is physically down; hardware state by default.
+    private let keyStateSource: @MainActor (UInt32) -> Bool
 
     private(set) var shortcut: PushToTalkShortcut?
     private var state = State.idle
@@ -66,8 +70,23 @@ final class PushToTalkMonitor {
         shortcut != nil
     }
 
-    init(hotKeyManager: HotKeyManager) {
+    init(
+        hotKeyManager: HotKeyManager,
+        modifierSource: @escaping @MainActor () -> PushToTalkShortcut.ModifierSet = { PushToTalkMonitor.hardwareModifiers() },
+        keyStateSource: @escaping @MainActor (UInt32) -> Bool = { PushToTalkMonitor.hardwareKeyIsDown($0) }
+    ) {
         self.hotKeyManager = hotKeyManager
+        self.modifierSource = modifierSource
+        self.keyStateSource = keyStateSource
+    }
+
+    /// Test hook: sets the shortcut without installing event monitors or
+    /// Carbon hotkeys, so the state machine can be driven directly through
+    /// the internal `handle…` entry points.
+    func configureForTesting(shortcut: PushToTalkShortcut) {
+        stop()
+        self.shortcut = shortcut
+        lastModifiers = modifierSource()
     }
 
     /// Starts (or restarts) monitoring `shortcut`. Throws if the Carbon
@@ -146,7 +165,7 @@ final class PushToTalkMonitor {
             monitors.append(local)
         }
 
-        lastModifiers = Self.hardwareModifiers()
+        lastModifiers = modifierSource()
     }
 
     /// Carbon backend: key/click monitors used only to cancel a recording.
@@ -202,7 +221,10 @@ final class PushToTalkMonitor {
         }
     }
 
-    private func handleModifiersChanged(_ modifiers: PushToTalkShortcut.ModifierSet, shortcut: PushToTalkShortcut) {
+    // The `handle…`, `armTimerFired` and `checkLiveModifiers` entry points
+    // are internal (not private) so tests can drive the state machine.
+
+    func handleModifiersChanged(_ modifiers: PushToTalkShortcut.ModifierSet, shortcut: PushToTalkShortcut) {
         // Ignore flagsChanged events that do not change the normalized set
         // (e.g. Caps Lock, Fn, or pressing the other side's Shift).
         guard modifiers != lastModifiers else {
@@ -228,7 +250,7 @@ final class PushToTalkMonitor {
         }
     }
 
-    private func handleInterruption() {
+    func handleInterruption() {
         switch state {
         case .idle:
             break
@@ -265,14 +287,14 @@ final class PushToTalkMonitor {
         armTask = nil
     }
 
-    private func armTimerFired() {
+    func armTimerFired() {
         armTask = nil
         guard state == .armed, let shortcut else {
             return
         }
 
         // Re-check the live modifier state in case an event was missed.
-        guard Self.hardwareModifiers() == shortcut.modifiers else {
+        guard modifierSource() == shortcut.modifiers else {
             state = .idle
             return
         }
@@ -309,7 +331,7 @@ final class PushToTalkMonitor {
         watchdogTask = nil
     }
 
-    private func checkLiveModifiers() {
+    func checkLiveModifiers() {
         guard state == .recording, let shortcut else {
             return
         }
@@ -317,7 +339,7 @@ final class PushToTalkMonitor {
         if let keyCode = shortcut.keyCode {
             // Carbon backend: if the released event was missed, the key is
             // no longer down; stop so the microphone never stays on.
-            if !CGEventSource.keyState(.hidSystemState, key: CGKeyCode(keyCode)) {
+            if !keyStateSource(keyCode) {
                 pushToTalkLog.info("Push-to-talk hotkey release detected by watchdog")
                 finishRecording()
             }
@@ -327,7 +349,7 @@ final class PushToTalkMonitor {
         // Read the hardware modifier state, not NSEvent.modifierFlags: the
         // latter reflects the last event this process saw, which goes stale
         // when monitors stop receiving events (e.g. secure input).
-        let live = Self.hardwareModifiers()
+        let live = modifierSource()
         if live != shortcut.modifiers {
             pushToTalkLog.info("Push-to-talk release detected by watchdog")
             lastModifiers = live
@@ -335,14 +357,18 @@ final class PushToTalkMonitor {
         }
     }
 
-    private static func hardwareModifiers() -> PushToTalkShortcut.ModifierSet {
+    static func hardwareModifiers() -> PushToTalkShortcut.ModifierSet {
         let flags = CGEventSource.flagsState(.hidSystemState)
         return PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.ModifierFlags(rawValue: UInt(flags.rawValue)))
     }
 
+    static func hardwareKeyIsDown(_ keyCode: UInt32) -> Bool {
+        CGEventSource.keyState(.hidSystemState, key: CGKeyCode(keyCode))
+    }
+
     // MARK: Carbon backend
 
-    private func handleHotKeyPressed() {
+    func handleHotKeyPressed() {
         // Carbon can deliver repeated pressed events while the key is held.
         guard state == .idle else {
             return
@@ -352,7 +378,7 @@ final class PushToTalkMonitor {
         onPress?()
     }
 
-    private func handleHotKeyReleased() {
+    func handleHotKeyReleased() {
         finishRecording()
     }
 }
