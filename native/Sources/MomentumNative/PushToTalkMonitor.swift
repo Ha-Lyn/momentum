@@ -83,6 +83,9 @@ final class PushToTalkMonitor {
                 onPress: { [weak self] in self?.handleHotKeyPressed() },
                 onRelease: { [weak self] in self?.handleHotKeyReleased() }
             )
+            // The Carbon hotkey only reports press/release; key presses and
+            // clicks (e.g. Escape) still need to cancel a recording.
+            installInterruptionMonitors()
             pushToTalkLog.info("Push-to-talk hotkey registered: \(shortcut.displayString, privacy: .public)")
         } else {
             try installEventMonitors()
@@ -146,8 +149,46 @@ final class PushToTalkMonitor {
         lastModifiers = Self.hardwareModifiers()
     }
 
+    /// Carbon backend: key/click monitors used only to cancel a recording.
+    /// Not fatal if unavailable (press/release still work through Carbon).
+    private func installInterruptionMonitors() {
+        let events: NSEvent.EventTypeMask = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] event in
+            self?.handle(event)
+        }) {
+            monitors.append(global)
+        } else {
+            pushToTalkLog.warning("Failed to install the push-to-talk interruption monitor; key presses will not cancel recordings")
+        }
+
+        if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
+            self?.handle(event)
+            return event
+        }) {
+            monitors.append(local)
+        }
+    }
+
     private func handle(_ event: NSEvent) {
-        guard let shortcut, shortcut.isModifierOnly else {
+        guard let shortcut else {
+            return
+        }
+
+        if let keyCode = shortcut.keyCode {
+            // Carbon backend: any other key press or click while recording
+            // cancels (the hotkey's own key is swallowed by Carbon; ignore
+            // it defensively). A later release is then a no-op.
+            switch event.type {
+            case .keyDown where UInt32(event.keyCode) == keyCode:
+                break
+            case .keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown:
+                if state == .recording {
+                    handleInterruption()
+                }
+            default:
+                break
+            }
             return
         }
 
