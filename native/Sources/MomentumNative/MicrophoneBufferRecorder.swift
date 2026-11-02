@@ -51,13 +51,12 @@ final class MicrophoneBufferRecorder {
         accumulator != nil
     }
 
-    #if DEBUG
     /// Test hook: the engine of the active session (nil once a configuration
-    /// change has dropped it).
+    /// change has dropped it). Not behind `#if DEBUG` so the tests also
+    /// build with `swift test -c release`.
     var activeEngineForTesting: AVAudioEngine? {
         engine
     }
-    #endif
 
     func start() throws {
         guard accumulator == nil else {
