@@ -282,6 +282,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         // Never prompt for Accessibility at launch: the menu shows
         // "Grant Accessibility Access…" and the request happens when the
         // user clicks it or turns the feature on.
+        quickTranscribeCoordinator.onMonitorError = { [weak self] error in
+            guard let self else { return }
+            self.refreshQuickTranscribeMenuState()
+            let shortcut = self.quickTranscribeCoordinator.shortcut.displayString
+            self.presentErrorAlert(
+                message: "Quick Transcribe shortcut \(shortcut) could not be registered: \(error.localizedDescription) Choose another one from Quick Transcribe Shortcut…."
+            )
+        }
         quickTranscribeCoordinator.start()
 
         accessibilityPermission.startObserving { [weak self] trusted in
@@ -360,7 +368,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func refreshQuickTranscribeMenuState() {
         let trusted = AccessibilityPermission.isTrusted
         quickTranscribeToggleItem?.state = quickTranscribeCoordinator.isEnabled ? .on : .off
-        quickTranscribeShortcutItem?.title = "Quick Transcribe Shortcut: \(quickTranscribeCoordinator.shortcut.displayString)…"
+        let unavailable = quickTranscribeCoordinator.isShortcutUnavailable ? " (unavailable)" : ""
+        quickTranscribeShortcutItem?.title = "Quick Transcribe Shortcut: \(quickTranscribeCoordinator.shortcut.displayString)\(unavailable)…"
         grantAccessibilityItem?.isHidden = trusted
     }
 

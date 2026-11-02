@@ -43,6 +43,14 @@ final class QuickTranscribeCoordinator {
     private(set) var isMonitoringSuspended = false
     private var targetApplication: NSRunningApplication?
 
+    /// True when the monitor should be running but could not be started
+    /// (e.g. a modifier+key hotkey already taken by another app). The
+    /// feature is then inert, so the UI must not present it as active.
+    private(set) var isShortcutUnavailable = false
+    /// Called when the monitor fails to start, so the owner can tell the
+    /// user (a failed global hotkey is surfaced, never only logged).
+    var onMonitorError: ((Error) -> Void)?
+
     /// True while a quick transcription is in progress (not idle). Used to
     /// keep note capture and quick transcribe mutually exclusive.
     var isBusy: Bool {
@@ -121,7 +129,7 @@ final class QuickTranscribeCoordinator {
         // While suspended the monitor is stopped, but the new shortcut is
         // still test-registered so registration errors surface right away.
         let wasRunning = monitor.isRunning
-        let shouldVerify = wasRunning || (isMonitoringSuspended && isEnabled && AccessibilityPermission.isTrusted)
+        let shouldVerify = wasRunning || isShortcutUnavailable || (isMonitoringSuspended && isEnabled && AccessibilityPermission.isTrusted)
         if shouldVerify {
             cancelRecordingIfNeeded()
             do {
@@ -139,6 +147,10 @@ final class QuickTranscribeCoordinator {
         }
 
         shortcut = newShortcut
+        if shouldVerify {
+            // The new shortcut registered successfully.
+            isShortcutUnavailable = false
+        }
         newShortcut.persist()
         quickTranscribeLog.info("Quick Transcribe shortcut set to \(newShortcut.displayString, privacy: .public)")
     }
@@ -153,6 +165,9 @@ final class QuickTranscribeCoordinator {
 
     private func refreshMonitor(trusted: Bool = AccessibilityPermission.isTrusted, forceRestart: Bool = false) {
         guard isEnabled, trusted, !isMonitoringSuspended else {
+            if !isMonitoringSuspended {
+                isShortcutUnavailable = false
+            }
             if monitor.isRunning {
                 cancelRecordingIfNeeded()
                 monitor.stop()
@@ -170,8 +185,11 @@ final class QuickTranscribeCoordinator {
         cancelRecordingIfNeeded()
         do {
             try monitor.start(shortcut: shortcut)
+            isShortcutUnavailable = false
         } catch {
             quickTranscribeLog.error("Failed to start push-to-talk monitor for \(self.shortcut.displayString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            isShortcutUnavailable = true
+            onMonitorError?(error)
         }
     }
 
