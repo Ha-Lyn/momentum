@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased — Remove the Electron prototype
+
+### Removed
+
+- The Electron prototype in `app/` (sources, Forge config, npm manifests,
+  ffmpeg download script and Python transcription helper). The native Swift
+  app is the only implementation.
+- Electron and Node.js entries in `.gitignore`, and the prototype references
+  in the README.
+
+## Unreleased — macOS app and menu bar icons
+
+### Added
+
+- `Resources/AppIcon.icns`, declared through `CFBundleIconFile`: a rounded
+  tile with margin and shadow following the macOS icon grid, so Finder and
+  `/Applications` show the app icon.
+- Menu bar icon: a monochrome template version of the logo
+  (`Resources/MenuBarIcon.tiff`) that adapts to light and dark menu bars.
+  Recording still shows `stop.circle.fill`.
+- `scripts/make-icon.py` and `scripts/make-menubar-icon.py` generate the PNG
+  sources from `Resources/P1.png` (`AppIcon.png`; `MenuBarIcon.png` and
+  `MenuBarIcon@2x.png`). `AppIcon.icns` and `MenuBarIcon.tiff` are then built
+  by hand with `sips` + `iconutil` and `tiffutil`, as described in each
+  script's header.
+
+### Changed
+
+- The Dock icon is no longer overridden at launch with the square `P1.png`;
+  the bundled icon is used, and the override only applies to unbundled
+  `swift run` builds.
+
 ## Unreleased — Quick Transcribe (push-to-talk dictation)
 
 ### Added

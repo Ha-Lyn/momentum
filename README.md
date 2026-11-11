@@ -25,9 +25,6 @@ The active implementation is the native macOS app in [`native/`](native/).
 The first transcription downloads the model through FluidAudio. Once the model
 is cached, audio processing and transcription run locally on the Mac.
 
-The [`app/`](app/) directory contains the earlier Electron prototype. It is
-kept for reference and is not the primary implementation.
-
 ## Requirements
 
 - macOS 15 or newer
@@ -191,17 +188,19 @@ captures reuse the loaded model while the app remains open.
 native/
   Package.swift                         Swift package definition
   Sources/MomentumNative/               Native macOS application
+  Resources/                            App and menu bar icons (P1.png is the source art)
   scripts/build-app.sh                  .app bundle builder
   scripts/publish-release.sh            Manual GitHub Release publisher
+  scripts/make-icon.py                  Generates AppIcon.png from P1.png
+                                        (AppIcon.icns: run sips + iconutil,
+                                        see the script header)
+  scripts/make-menubar-icon.py          Generates MenuBarIcon.png and
+                                        MenuBarIcon@2x.png from P1.png
+                                        (MenuBarIcon.tiff: run tiffutil, see
+                                        the script header)
 
 scripts/
   install.sh                            One-command release installer
-
-app/
-  src/                                  Electron prototype source
-  scripts/                              Prototype transcription helpers
-
-momentum-prd.md                         Original product requirements
 ```
 
 ## Development Notes
