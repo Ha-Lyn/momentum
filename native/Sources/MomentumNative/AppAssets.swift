@@ -19,4 +19,20 @@ enum AppAssets {
 
         return NSImage(contentsOf: fallbackURL)
     }
+
+    /// Monochrome template glyph for the menu bar; AppKit tints it to match
+    /// the light/dark menu bar.
+    static func menuBarIcon() -> NSImage? {
+        let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "tiff")
+            ?? URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Resources/MenuBarIcon.tiff")
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 16, height: 16)
+        image.isTemplate = true
+        image.accessibilityDescription = "Momentum"
+        return image
+    }
 }
