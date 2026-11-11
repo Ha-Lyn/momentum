@@ -158,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Momentum")
+            button.image = idleStatusImage()
             button.imagePosition = .imageOnly
             button.toolTip = "Momentum"
         }
@@ -395,11 +395,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         audioChannelItems.values.forEach { $0.isEnabled = !isRecording }
 
         if let button = statusItem?.button {
-            button.image = NSImage(
-                systemSymbolName: isRecording ? "stop.circle.fill" : "mic.circle.fill",
-                accessibilityDescription: "Momentum"
-            )
+            button.image = isRecording
+                ? NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Momentum")
+                : idleStatusImage()
         }
+    }
+
+    private func idleStatusImage() -> NSImage? {
+        AppAssets.menuBarIcon()
+            ?? NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Momentum")
     }
 
     private func refreshAudioChannelMenuState() {
