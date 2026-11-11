@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Remove the Electron prototype
+
+### Removed
+
+- The Electron prototype in `app/` (sources, Forge config, npm manifests,
+  ffmpeg download script and Python transcription helper). The native Swift
+  app is the only implementation.
+- Electron and Node.js entries in `.gitignore`, and the prototype references
+  in the README.
+
 ## Unreleased — Quick Transcribe (push-to-talk dictation)
 
 ### Added

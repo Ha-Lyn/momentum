@@ -25,9 +25,6 @@ The active implementation is the native macOS app in [`native/`](native/).
 The first transcription downloads the model through FluidAudio. Once the model
 is cached, audio processing and transcription run locally on the Mac.
 
-The [`app/`](app/) directory contains the earlier Electron prototype. It is
-kept for reference and is not the primary implementation.
-
 ## Requirements
 
 - macOS 15 or newer
@@ -196,12 +193,6 @@ native/
 
 scripts/
   install.sh                            One-command release installer
-
-app/
-  src/                                  Electron prototype source
-  scripts/                              Prototype transcription helpers
-
-momentum-prd.md                         Original product requirements
 ```
 
 ## Development Notes
