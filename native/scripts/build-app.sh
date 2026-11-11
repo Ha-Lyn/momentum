@@ -29,7 +29,7 @@ if [[ -n "${APP_VERSION:-}" ]]; then
 fi
 cp "$INFO_PLIST_TMP" "$CONTENTS_DIR/Info.plist"
 
-cp "$ROOT_DIR/../app/P1.png" "$RESOURCES_DIR/P1.png"
+cp "$ROOT_DIR/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
 # A stable signing identity is required for macOS TCC permissions (e.g. Screen
 # Recording) to survive rebuilds. Ad-hoc signatures are identified by binary

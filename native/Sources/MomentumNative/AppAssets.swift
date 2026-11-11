@@ -2,10 +2,12 @@ import AppKit
 import Foundation
 
 enum AppAssets {
+    /// Dock icon override for unbundled runs (`swift run`). A built `.app`
+    /// declares `CFBundleIconFile`, so macOS already shows the bundled icon in
+    /// the Dock and Finder and no override is needed.
     static func appIcon() -> NSImage? {
-        if let bundledURL = Bundle.main.resourceURL?.appendingPathComponent("P1.png"),
-           let image = NSImage(contentsOf: bundledURL) {
-            return image
+        if Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") != nil {
+            return nil
         }
 
         let sourceFileURL = URL(fileURLWithPath: #filePath)
@@ -13,8 +15,7 @@ enum AppAssets {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let repoRoot = nativeRoot.deletingLastPathComponent()
-        let fallbackURL = repoRoot.appendingPathComponent("app/P1.png")
+        let fallbackURL = nativeRoot.appendingPathComponent("Resources/AppIcon.png")
 
         return NSImage(contentsOf: fallbackURL)
     }
