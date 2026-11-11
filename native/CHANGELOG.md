@@ -20,8 +20,11 @@
 - Menu bar icon: a monochrome template version of the logo
   (`Resources/MenuBarIcon.tiff`) that adapts to light and dark menu bars.
   Recording still shows `stop.circle.fill`.
-- `scripts/make-icon.py` and `scripts/make-menubar-icon.py` regenerate both
-  icons from `Resources/P1.png`.
+- `scripts/make-icon.py` and `scripts/make-menubar-icon.py` generate the PNG
+  sources from `Resources/P1.png` (`AppIcon.png`; `MenuBarIcon.png` and
+  `MenuBarIcon@2x.png`). `AppIcon.icns` and `MenuBarIcon.tiff` are then built
+  by hand with `sips` + `iconutil` and `tiffutil`, as described in each
+  script's header.
 
 ### Changed
 

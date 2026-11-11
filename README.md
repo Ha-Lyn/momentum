@@ -191,8 +191,13 @@ native/
   Resources/                            App and menu bar icons (P1.png is the source art)
   scripts/build-app.sh                  .app bundle builder
   scripts/publish-release.sh            Manual GitHub Release publisher
-  scripts/make-icon.py                  Regenerates the app icon from P1.png
-  scripts/make-menubar-icon.py          Regenerates the menu bar icon from P1.png
+  scripts/make-icon.py                  Generates AppIcon.png from P1.png
+                                        (AppIcon.icns: run sips + iconutil,
+                                        see the script header)
+  scripts/make-menubar-icon.py          Generates MenuBarIcon.png and
+                                        MenuBarIcon@2x.png from P1.png
+                                        (MenuBarIcon.tiff: run tiffutil, see
+                                        the script header)
 
 scripts/
   install.sh                            One-command release installer
