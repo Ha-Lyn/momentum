@@ -188,8 +188,11 @@ captures reuse the loaded model while the app remains open.
 native/
   Package.swift                         Swift package definition
   Sources/MomentumNative/               Native macOS application
+  Resources/                            App and menu bar icons (P1.png is the source art)
   scripts/build-app.sh                  .app bundle builder
   scripts/publish-release.sh            Manual GitHub Release publisher
+  scripts/make-icon.py                  Regenerates the app icon from P1.png
+  scripts/make-menubar-icon.py          Regenerates the menu bar icon from P1.png
 
 scripts/
   install.sh                            One-command release installer

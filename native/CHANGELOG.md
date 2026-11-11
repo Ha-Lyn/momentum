@@ -10,6 +10,25 @@
 - Electron and Node.js entries in `.gitignore`, and the prototype references
   in the README.
 
+## Unreleased — macOS app and menu bar icons
+
+### Added
+
+- `Resources/AppIcon.icns`, declared through `CFBundleIconFile`: a rounded
+  tile with margin and shadow following the macOS icon grid, so Finder and
+  `/Applications` show the app icon.
+- Menu bar icon: a monochrome template version of the logo
+  (`Resources/MenuBarIcon.tiff`) that adapts to light and dark menu bars.
+  Recording still shows `stop.circle.fill`.
+- `scripts/make-icon.py` and `scripts/make-menubar-icon.py` regenerate both
+  icons from `Resources/P1.png`.
+
+### Changed
+
+- The Dock icon is no longer overridden at launch with the square `P1.png`;
+  the bundled icon is used, and the override only applies to unbundled
+  `swift run` builds.
+
 ## Unreleased — Quick Transcribe (push-to-talk dictation)
 
 ### Added
