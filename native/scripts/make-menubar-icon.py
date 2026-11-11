@@ -1,5 +1,5 @@
-# Generates the monochrome template glyph used in the menu bar from app/P1.png:
-#   python3 scripts/make-menubar-icon.py ../app/P1.png /tmp/out
+# Generates the monochrome template glyph used in the menu bar from Resources/P1.png:
+#   python3 scripts/make-menubar-icon.py Resources/P1.png /tmp/out
 #   tiffutil -cathidpicheck /tmp/out/MenuBarIcon.png /tmp/out/MenuBarIcon@2x.png -out Resources/MenuBarIcon.tiff
 import os, sys
 from PIL import Image, ImageChops, ImageFilter

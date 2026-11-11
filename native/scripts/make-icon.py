@@ -1,5 +1,5 @@
-# Regenerates Resources/AppIcon.png (macOS-style tile) from app/P1.png:
-#   python3 scripts/make-icon.py ../app/P1.png Resources/AppIcon.png
+# Regenerates Resources/AppIcon.png (macOS-style tile) from Resources/P1.png:
+#   python3 scripts/make-icon.py Resources/P1.png Resources/AppIcon.png
 # then rebuild Resources/AppIcon.icns with sips + iconutil.
 import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
