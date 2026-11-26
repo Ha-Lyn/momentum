@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — Manual Quick Transcribe menu action and Push-to-Talk status
+
+### Added
+
+- Status menu **Start Quick Transcribe** / **Stop Quick Transcribe** action to
+  start and stop a quick transcription directly from the menu (works even
+  without Accessibility by copying the transcript to the clipboard with a `⌘V`
+  hint).
+
+### Changed
+
+- Renamed the status menu toggle to **Push-to-Talk (`<shortcut>`)** and show
+  **Needs Accessibility** / **Unavailable** (unchecked) instead of a checkmark
+  when the global monitor is inactive; clicking either inactive state requests
+  Accessibility or retries shortcut registration rather than silently disabling
+  the feature.
+- `PushToTalkMonitor` now reads live modifier and key state from
+  `.combinedSessionState` and resyncs `lastModifiers` if the arm timer aborts.
+
 ## Unreleased — Remove the Electron prototype
 
 ### Removed

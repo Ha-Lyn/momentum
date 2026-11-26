@@ -325,6 +325,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return
         }
 
+        if quickTranscribeCoordinator.isShortcutUnavailable {
+            quickTranscribeCoordinator.retryMonitoring()
+            refreshQuickTranscribeMenuState()
+            return
+        }
+
         let enabled = !quickTranscribeCoordinator.isEnabled
         quickTranscribeCoordinator.setEnabled(enabled)
 

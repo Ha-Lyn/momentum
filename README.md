@@ -93,10 +93,13 @@ Momentum requests access when it launches:
 - **System Settings > Privacy & Security > Screen & System Audio Recording**
   (System Audio Recording Only)
 
-Quick Transcribe additionally needs **System Settings > Privacy & Security >
-Accessibility**. It is never requested at launch: use the menu's **Grant
-Accessibility Access…** item (shown only while access is missing) or turn
-Quick Transcribe on to be prompted.
+Quick Transcribe's global push-to-talk shortcut and automatic paste need
+**System Settings > Privacy & Security > Accessibility**. It is never requested
+at launch: use the menu's **Grant Accessibility Access…** item (shown only
+while access is missing) or click **Push-to-Talk** to be prompted. You can also
+trigger Quick Transcribe manually from the menu's **Start Quick Transcribe**
+item without Accessibility (the transcript is copied to the clipboard for
+`Command + V`).
 
 
 ### Upgrade
@@ -153,9 +156,11 @@ Details:
 - It always records the microphone, regardless of the Audio Channels
   selection, and uses the selected transcription language.
 - Accessibility permission (System Settings > Privacy & Security >
-  Accessibility) is required both to detect the global shortcut and to paste.
-  Without it the feature stays inactive and the menu shows **Grant
-  Accessibility Access…**.
+  Accessibility) is required to detect the global push-to-talk shortcut and to
+  paste automatically. Without it, the menu shows **Push-to-Talk (`⌥⇧` — Needs
+  Accessibility)** and **Grant Accessibility Access…**, while **Start Quick
+  Transcribe** / **Stop Quick Transcribe** can still record and copy the
+  transcript to the clipboard.
 - Clipboard: the text is pasted through the clipboard. When Momentum can
   confirm the paste, your previous clipboard contents are restored. Otherwise
   (for example in a password field or an app that does not expose its text
@@ -165,7 +170,9 @@ Details:
   note recording cannot start while a quick transcription is running.
 - The first use needs the transcription model, which is downloaded
   automatically (see [Local Model](#local-model)); later uses run locally.
-- Turn the feature on or off with the status menu's **Quick Transcribe** item.
+- Turn the push-to-talk shortcut on or off with the status menu's
+  **Push-to-Talk** item, or start/stop manually with **Start Quick Transcribe**
+  / **Stop Quick Transcribe**.
 
 ## Local Model
 
