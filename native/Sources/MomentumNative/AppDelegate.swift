@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var languageItems: [TranscriptionLanguage: NSMenuItem] = [:]
     private var audioChannelsMenuItem: NSMenuItem?
     private var audioChannelItems: [AudioChannel: NSMenuItem] = [:]
+    private var quickTranscribeActionItem: NSMenuItem?
     private var quickTranscribeToggleItem: NSMenuItem?
     private var quickTranscribeShortcutItem: NSMenuItem?
     private var grantAccessibilityItem: NSMenuItem?
@@ -191,8 +192,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         menu.addItem(.separator())
 
+        let quickTranscribeAction = NSMenuItem(
+            title: "Start Quick Transcribe",
+            action: #selector(toggleManualQuickTranscribe),
+            keyEquivalent: ""
+        )
+        quickTranscribeAction.target = self
+        menu.addItem(quickTranscribeAction)
+
         let quickTranscribeItem = NSMenuItem(
-            title: "Quick Transcribe",
+            title: "Push-to-Talk",
             action: #selector(toggleQuickTranscribe),
             keyEquivalent: ""
         )
@@ -200,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         menu.addItem(quickTranscribeItem)
 
         let shortcutItem = NSMenuItem(
-            title: "Quick Transcribe Shortcut",
+            title: "Quick Transcribe Shortcut…",
             action: #selector(openShortcutSettings),
             keyEquivalent: ""
         )
@@ -247,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         toggleMenuItem = toggleItem
         languageMenuItem = languageItem
         audioChannelsMenuItem = channelsItem
+        quickTranscribeActionItem = quickTranscribeAction
         quickTranscribeToggleItem = quickTranscribeItem
         quickTranscribeShortcutItem = shortcutItem
         grantAccessibilityItem = accessibilityItem
@@ -290,6 +300,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 message: "Quick Transcribe shortcut \(shortcut) could not be registered: \(error.localizedDescription) Choose another one from Quick Transcribe Shortcut…."
             )
         }
+        quickTranscribeCoordinator.onStateChange = { [weak self] in
+            self?.refreshQuickTranscribeMenuState()
+        }
         quickTranscribeCoordinator.start()
 
         accessibilityPermission.startObserving { [weak self] trusted in
@@ -300,7 +313,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc
+    private func toggleManualQuickTranscribe() {
+        quickTranscribeCoordinator.toggleManualRecording()
+        refreshQuickTranscribeMenuState()
+    }
+
+    @objc
     private func toggleQuickTranscribe() {
+        if quickTranscribeCoordinator.isEnabled && !AccessibilityPermission.isTrusted {
+            requestAccessibilityAccess()
+            return
+        }
+
         let enabled = !quickTranscribeCoordinator.isEnabled
         quickTranscribeCoordinator.setEnabled(enabled)
 
@@ -370,9 +394,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     private func refreshQuickTranscribeMenuState() {
         let trusted = AccessibilityPermission.isTrusted
-        quickTranscribeToggleItem?.state = quickTranscribeCoordinator.isEnabled ? .on : .off
-        let unavailable = quickTranscribeCoordinator.isShortcutUnavailable ? " (unavailable)" : ""
-        quickTranscribeShortcutItem?.title = "Quick Transcribe Shortcut: \(quickTranscribeCoordinator.shortcut.displayString)\(unavailable)…"
+        let isQuickRecording = quickTranscribeCoordinator.state == .recording
+        quickTranscribeActionItem?.title = isQuickRecording ? "Stop Quick Transcribe" : "Start Quick Transcribe"
+
+        let shortcutDisplay = quickTranscribeCoordinator.shortcut.displayString
+        if quickTranscribeCoordinator.isEnabled && !trusted {
+            quickTranscribeToggleItem?.title = "Push-to-Talk (\(shortcutDisplay) — Needs Accessibility)"
+            quickTranscribeToggleItem?.state = .off
+        } else if quickTranscribeCoordinator.isShortcutUnavailable {
+            quickTranscribeToggleItem?.title = "Push-to-Talk (\(shortcutDisplay) — Unavailable)"
+            quickTranscribeToggleItem?.state = .off
+        } else {
+            quickTranscribeToggleItem?.title = "Push-to-Talk (\(shortcutDisplay))"
+            quickTranscribeToggleItem?.state = quickTranscribeCoordinator.isEnabled ? .on : .off
+        }
+
+        quickTranscribeShortcutItem?.title = "Quick Transcribe Shortcut…"
         grantAccessibilityItem?.isHidden = trusted
     }
 
@@ -385,6 +422,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             // Starting a note recording is blocked while a quick
             // transcription is in progress; stopping is always allowed.
             return isRecording || !quickTranscribeCoordinator.isBusy
+        }
+
+        if menuItem === quickTranscribeActionItem {
+            if quickTranscribeCoordinator.state == .recording {
+                return true
+            }
+            return !isRecording && !isStartingRecording && !quickTranscribeCoordinator.isBusy
         }
 
         return true

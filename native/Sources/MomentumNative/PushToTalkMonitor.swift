@@ -294,7 +294,10 @@ final class PushToTalkMonitor {
         }
 
         // Re-check the live modifier state in case an event was missed.
-        guard modifierSource() == shortcut.modifiers else {
+        let live = modifierSource()
+        guard live == shortcut.modifiers else {
+            pushToTalkLog.debug("Arm timer aborted: live modifiers \(live.displayString, privacy: .public) != \(shortcut.displayString, privacy: .public)")
+            lastModifiers = live
             state = .idle
             return
         }
@@ -358,12 +361,12 @@ final class PushToTalkMonitor {
     }
 
     static func hardwareModifiers() -> PushToTalkShortcut.ModifierSet {
-        let flags = CGEventSource.flagsState(.hidSystemState)
+        let flags = CGEventSource.flagsState(.combinedSessionState)
         return PushToTalkShortcut.ModifierSet(eventFlags: NSEvent.ModifierFlags(rawValue: UInt(flags.rawValue)))
     }
 
     static func hardwareKeyIsDown(_ keyCode: UInt32) -> Bool {
-        CGEventSource.keyState(.hidSystemState, key: CGKeyCode(keyCode))
+        CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(keyCode))
     }
 
     // MARK: Carbon backend

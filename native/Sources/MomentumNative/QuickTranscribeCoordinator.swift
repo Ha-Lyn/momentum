@@ -20,6 +20,11 @@ final class QuickTranscribeCoordinator {
         case inserting
     }
 
+    private enum Trigger: Equatable {
+        case pushToTalk
+        case manual
+    }
+
     /// FluidAudio rejects audio shorter than 0.3 s; shorter presses are
     /// treated as accidental and discarded silently.
     static let minimumDuration: TimeInterval = 0.3
@@ -34,7 +39,14 @@ final class QuickTranscribeCoordinator {
     private let isNoteRecordingActive: @MainActor () -> Bool
     private let currentLanguage: @MainActor () -> TranscriptionLanguage
 
-    private(set) var state = State.idle
+    private(set) var state = State.idle {
+        didSet {
+            if state != oldValue {
+                onStateChange?()
+            }
+        }
+    }
+    private var activeTrigger: Trigger?
     private(set) var isEnabled: Bool
     private(set) var shortcut: PushToTalkShortcut
     /// True while the monitor is temporarily paused (e.g. while the
@@ -50,6 +62,8 @@ final class QuickTranscribeCoordinator {
     /// Called when the monitor fails to start, so the owner can tell the
     /// user (a failed global hotkey is surfaced, never only logged).
     var onMonitorError: ((Error) -> Void)?
+    /// Called whenever `state` changes so the menu UI can stay in sync.
+    var onStateChange: (() -> Void)?
 
     /// True while a quick transcription is in progress (not idle). Used to
     /// keep note capture and quick transcribe mutually exclusive.
@@ -193,26 +207,47 @@ final class QuickTranscribeCoordinator {
         }
     }
 
-    /// Discards an in-progress recording when the monitor goes away (no
-    /// release event would ever arrive). Later stages finish on their own.
+    /// Discards an in-progress push-to-talk recording when the monitor goes
+    /// away (no release event would ever arrive). Manual recordings and later
+    /// stages finish on their own.
     private func cancelRecordingIfNeeded() {
-        guard state == .recording else {
+        guard state == .recording, activeTrigger == .pushToTalk else {
             return
         }
         quickTranscribeLog.info("Discarding in-progress recording because the monitor is being reconfigured")
         handleCancel()
     }
 
+    // MARK: Manual trigger
+
+    /// Starts a quick transcription when idle, or stops and transcribes the
+    /// active recording. Used by the status menu's Start/Stop Quick Transcribe
+    /// item so Quick Transcribe is also usable without holding the shortcut.
+    func toggleManualRecording() {
+        switch state {
+        case .idle:
+            startRecording(trigger: .manual)
+        case .recording:
+            finishRecording()
+        case .transcribing, .inserting:
+            quickTranscribeLog.debug("Ignoring manual Quick Transcribe toggle while busy (state=\(String(describing: self.state), privacy: .public))")
+        }
+    }
+
     // MARK: Push-to-talk events
 
     private func handlePress() {
+        startRecording(trigger: .pushToTalk)
+    }
+
+    private func startRecording(trigger: Trigger) {
         guard state == .idle else {
-            quickTranscribeLog.debug("Ignoring push-to-talk press while busy (state=\(String(describing: self.state), privacy: .public))")
+            quickTranscribeLog.debug("Ignoring quick transcribe start while busy (state=\(String(describing: self.state), privacy: .public))")
             return
         }
 
         guard !isNoteRecordingActive() else {
-            quickTranscribeLog.info("Ignoring push-to-talk press: note recording in progress")
+            quickTranscribeLog.info("Ignoring quick transcribe start: note recording in progress")
             pill.showMessage("Note recording in progress")
             return
         }
@@ -230,18 +265,27 @@ final class QuickTranscribeCoordinator {
         }
 
         targetApplication = target
+        activeTrigger = trigger
         state = .recording
         pill.showListening()
-        quickTranscribeLog.info("Quick Transcribe recording started (target=\(target?.bundleIdentifier ?? "nil", privacy: .public))")
+        quickTranscribeLog.info("Quick Transcribe recording started (trigger=\(String(describing: trigger), privacy: .public), target=\(target?.bundleIdentifier ?? "nil", privacy: .public))")
     }
 
     private func handleRelease() {
+        guard state == .recording, activeTrigger == .pushToTalk else {
+            return
+        }
+        finishRecording()
+    }
+
+    private func finishRecording() {
         guard state == .recording else {
             return
         }
 
         // Leave .recording right away so a new press during the tail or the
         // transcription is ignored.
+        activeTrigger = nil
         state = .transcribing
         Task { @MainActor [weak self] in
             await self?.finishSession()
@@ -249,13 +293,14 @@ final class QuickTranscribeCoordinator {
     }
 
     private func handleCancel() {
-        guard state == .recording else {
+        guard state == .recording, activeTrigger == .pushToTalk else {
             return
         }
 
         recorder.cancel()
         pill.hide()
         targetApplication = nil
+        activeTrigger = nil
         state = .idle
         quickTranscribeLog.info("Quick Transcribe cancelled")
     }
