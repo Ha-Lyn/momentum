@@ -5,6 +5,37 @@ import os
 // Never log transcript text; lengths and states only.
 private let quickTranscribeLog = Logger(subsystem: "com.momentum.native", category: "quick-transcribe")
 
+@MainActor
+protocol QuickTranscribeAudioRecording: AnyObject {
+    func start() throws
+    func stop(tailDuration: TimeInterval) async -> [Float]
+    func cancel()
+}
+
+extension QuickTranscribeAudioRecording {
+    func stop() async -> [Float] {
+        await stop(tailDuration: 0.15)
+    }
+}
+
+extension MicrophoneBufferRecorder: QuickTranscribeAudioRecording {}
+
+@MainActor
+protocol QuickTranscribePillPresenting: AnyObject {
+    func showListening()
+    func showTranscribing()
+    func showMessage(_ text: String, duration: TimeInterval)
+    func hide()
+}
+
+extension QuickTranscribePillPresenting {
+    func showMessage(_ text: String) {
+        showMessage(text, duration: 2.0)
+    }
+}
+
+extension FloatingPillWindowController: QuickTranscribePillPresenting {}
+
 /// Push-to-talk dictation: hold the shortcut to record the microphone,
 /// release to transcribe locally and paste the text into the app that was
 /// focused. Nothing is written to disk and no NSAlert is ever shown (it
@@ -20,21 +51,33 @@ final class QuickTranscribeCoordinator {
         case inserting
     }
 
+    private enum Trigger: Equatable {
+        case pushToTalk
+        case manual
+    }
+
     /// FluidAudio rejects audio shorter than 0.3 s; shorter presses are
     /// treated as accidental and discarded silently.
     static let minimumDuration: TimeInterval = 0.3
     private static let minimumSampleCount = Int(MicrophoneBufferRecorder.targetSampleRate * minimumDuration)
     private static let errorMessageDuration: TimeInterval = 3.5
 
-    private let recorder = MicrophoneBufferRecorder()
-    private let textInserter = TextInserter()
+    private let recorder: any QuickTranscribeAudioRecording
     private let monitor: PushToTalkMonitor
-    private let transcriptionService: TranscriptionService
-    private let pill: FloatingPillWindowController
+    private let pill: any QuickTranscribePillPresenting
+    private let transcribeAudio: @Sendable ([Float], TranscriptionLanguage) async throws -> String
+    private let insertText: @MainActor (String, NSRunningApplication?) async -> InsertResult
     private let isNoteRecordingActive: @MainActor () -> Bool
     private let currentLanguage: @MainActor () -> TranscriptionLanguage
 
-    private(set) var state = State.idle
+    private(set) var state = State.idle {
+        didSet {
+            if state != oldValue {
+                onStateChange?()
+            }
+        }
+    }
+    private var activeTrigger: Trigger?
     private(set) var isEnabled: Bool
     private(set) var shortcut: PushToTalkShortcut
     /// True while the monitor is temporarily paused (e.g. while the
@@ -50,6 +93,8 @@ final class QuickTranscribeCoordinator {
     /// Called when the monitor fails to start, so the owner can tell the
     /// user (a failed global hotkey is surfaced, never only logged).
     var onMonitorError: ((Error) -> Void)?
+    /// Called whenever `state` changes so the menu UI can stay in sync.
+    var onStateChange: (() -> Void)?
 
     /// True while a quick transcription is in progress (not idle). Used to
     /// keep note capture and quick transcribe mutually exclusive.
@@ -62,7 +107,7 @@ final class QuickTranscribeCoordinator {
         monitor.isRunning
     }
 
-    init(
+    convenience init(
         transcriptionService: TranscriptionService,
         pill: FloatingPillWindowController,
         hotKeyManager: HotKeyManager,
@@ -71,8 +116,39 @@ final class QuickTranscribeCoordinator {
         shortcut: PushToTalkShortcut = .load(),
         isEnabled: Bool = QuickTranscribeSettings.isEnabled
     ) {
-        self.transcriptionService = transcriptionService
+        let textInserter = TextInserter()
+        self.init(
+            recorder: MicrophoneBufferRecorder(),
+            pill: pill,
+            hotKeyManager: hotKeyManager,
+            transcribeAudio: { samples, language in
+                try await transcriptionService.transcribe(samples: samples, language: language)
+            },
+            insertText: { text, target in
+                await textInserter.insert(text, into: target)
+            },
+            isNoteRecordingActive: isNoteRecordingActive,
+            currentLanguage: currentLanguage,
+            shortcut: shortcut,
+            isEnabled: isEnabled
+        )
+    }
+
+    init(
+        recorder: any QuickTranscribeAudioRecording,
+        pill: any QuickTranscribePillPresenting,
+        hotKeyManager: HotKeyManager,
+        transcribeAudio: @escaping @Sendable ([Float], TranscriptionLanguage) async throws -> String,
+        insertText: @escaping @MainActor (String, NSRunningApplication?) async -> InsertResult,
+        isNoteRecordingActive: @escaping @MainActor () -> Bool,
+        currentLanguage: @escaping @MainActor () -> TranscriptionLanguage,
+        shortcut: PushToTalkShortcut = .load(),
+        isEnabled: Bool = QuickTranscribeSettings.isEnabled
+    ) {
+        self.recorder = recorder
         self.pill = pill
+        self.transcribeAudio = transcribeAudio
+        self.insertText = insertText
         self.isNoteRecordingActive = isNoteRecordingActive
         self.currentLanguage = currentLanguage
         self.shortcut = shortcut
@@ -90,6 +166,12 @@ final class QuickTranscribeCoordinator {
     /// Call once at launch.
     func start() {
         refreshMonitor()
+    }
+
+    /// Retries installing the push-to-talk monitor without changing the
+    /// persisted enabled state (used when the shortcut was unavailable).
+    func retryMonitoring() {
+        refreshMonitor(forceRestart: true)
     }
 
     /// Enables/disables the feature and persists the setting.
@@ -193,26 +275,48 @@ final class QuickTranscribeCoordinator {
         }
     }
 
-    /// Discards an in-progress recording when the monitor goes away (no
-    /// release event would ever arrive). Later stages finish on their own.
-    private func cancelRecordingIfNeeded() {
-        guard state == .recording else {
+    /// Discards an in-progress push-to-talk recording when the monitor goes
+    /// away (no release event would ever arrive). Manual recordings and later
+    /// stages finish on their own. Internal so tests can drive this path.
+    func cancelRecordingIfNeeded() {
+        guard state == .recording, activeTrigger == .pushToTalk else {
             return
         }
         quickTranscribeLog.info("Discarding in-progress recording because the monitor is being reconfigured")
         handleCancel()
     }
 
-    // MARK: Push-to-talk events
+    // MARK: Manual trigger
 
-    private func handlePress() {
+    /// Starts a quick transcription when idle, or stops and transcribes the
+    /// active recording. Used by the status menu's Start/Stop Quick Transcribe
+    /// item so Quick Transcribe is also usable without holding the shortcut.
+    func toggleManualRecording() {
+        switch state {
+        case .idle:
+            startRecording(trigger: .manual)
+        case .recording:
+            finishRecording()
+        case .transcribing, .inserting:
+            quickTranscribeLog.debug("Ignoring manual Quick Transcribe toggle while busy (state=\(String(describing: self.state), privacy: .public))")
+        }
+    }
+
+    // MARK: Push-to-talk events
+    // Internal (not private) so tests can drive the coordinator directly.
+
+    func handlePress() {
+        startRecording(trigger: .pushToTalk)
+    }
+
+    private func startRecording(trigger: Trigger) {
         guard state == .idle else {
-            quickTranscribeLog.debug("Ignoring push-to-talk press while busy (state=\(String(describing: self.state), privacy: .public))")
+            quickTranscribeLog.debug("Ignoring quick transcribe start while busy (state=\(String(describing: self.state), privacy: .public))")
             return
         }
 
         guard !isNoteRecordingActive() else {
-            quickTranscribeLog.info("Ignoring push-to-talk press: note recording in progress")
+            quickTranscribeLog.info("Ignoring quick transcribe start: note recording in progress")
             pill.showMessage("Note recording in progress")
             return
         }
@@ -230,32 +334,42 @@ final class QuickTranscribeCoordinator {
         }
 
         targetApplication = target
+        activeTrigger = trigger
         state = .recording
         pill.showListening()
-        quickTranscribeLog.info("Quick Transcribe recording started (target=\(target?.bundleIdentifier ?? "nil", privacy: .public))")
+        quickTranscribeLog.info("Quick Transcribe recording started (trigger=\(String(describing: trigger), privacy: .public), target=\(target?.bundleIdentifier ?? "nil", privacy: .public))")
     }
 
-    private func handleRelease() {
+    func handleRelease() {
+        guard state == .recording, activeTrigger == .pushToTalk else {
+            return
+        }
+        finishRecording()
+    }
+
+    private func finishRecording() {
         guard state == .recording else {
             return
         }
 
         // Leave .recording right away so a new press during the tail or the
         // transcription is ignored.
+        activeTrigger = nil
         state = .transcribing
         Task { @MainActor [weak self] in
             await self?.finishSession()
         }
     }
 
-    private func handleCancel() {
-        guard state == .recording else {
+    func handleCancel() {
+        guard state == .recording, activeTrigger == .pushToTalk else {
             return
         }
 
         recorder.cancel()
         pill.hide()
         targetApplication = nil
+        activeTrigger = nil
         state = .idle
         quickTranscribeLog.info("Quick Transcribe cancelled")
     }
@@ -280,8 +394,7 @@ final class QuickTranscribeCoordinator {
         let transcript: String
         do {
             let language = currentLanguage()
-            transcript = try await transcriptionService
-                .transcribe(samples: samples, language: language)
+            transcript = try await transcribeAudio(samples, language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             quickTranscribeLog.error("Quick transcription failed: \(error.localizedDescription, privacy: .public)")
@@ -296,7 +409,7 @@ final class QuickTranscribeCoordinator {
         }
 
         state = .inserting
-        let result = await textInserter.insert(transcript, into: targetApplication)
+        let result = await insertText(transcript, targetApplication)
 
         switch result {
         case .confirmed:

@@ -90,6 +90,12 @@ struct PushToTalkMonitorTests {
         keyboard.modifiers = [] // release missed by the event stream
         monitor.armTimerFired()
         #expect(recorder.events.isEmpty)
+
+        // Subsequent press must still arm even if both modifiers arrive together.
+        keyboard.modifiers = [.option, .shift]
+        monitor.handleModifiersChanged([.option, .shift], shortcut: .default)
+        monitor.armTimerFired()
+        #expect(recorder.events == ["press"])
     }
 
     @Test func watchdogStopsRecordingWhenTheReleaseEventIsMissed() {
